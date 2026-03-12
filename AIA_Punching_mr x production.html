@@ -1,0 +1,1052 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AIA Punching Schedule</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
+
+:root {
+  --ink:     #0F1923;
+  --navy:    #1C3557;
+  --blue:    #2563EB;
+  --sky:     #EFF6FF;
+  --accent:  #F97316;
+  --green:   #16A34A;
+  --red:     #DC2626;
+  --amber:   #D97706;
+  --bg:      #F8FAFC;
+  --surface: #FFFFFF;
+  --border:  #E2E8F0;
+  --muted:   #64748B;
+  --soft:    #F1F5F9;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Plus Jakarta Sans', sans-serif; background: var(--bg); color: var(--ink); min-height: 100vh; }
+
+/* ── TOPBAR ── */
+.topbar {
+  background: var(--ink);
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 28px;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  border-bottom: 1px solid #1E2D3D;
+}
+.topbar-brand { display: flex; align-items: center; gap: 12px; }
+.topbar-logo {
+  width: 32px; height: 32px;
+  background: var(--accent);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; font-weight: 800; color: #fff;
+}
+.topbar-name { font-size: 15px; font-weight: 700; color: #fff; letter-spacing: 0.3px; }
+.topbar-name span { color: var(--accent); }
+.topbar-date { font-size: 11px; color: #64748B; font-family: 'JetBrains Mono', monospace; }
+
+/* ── STEPPER ── */
+.stepper-wrap { background: var(--surface); border-bottom: 1px solid var(--border); padding: 16px 28px; }
+.stepper { display: flex; align-items: center; max-width: 500px; margin: 0 auto; }
+.step-item { display: flex; align-items: center; gap: 10px; flex: 1; }
+.step-num {
+  width: 32px; height: 32px; border-radius: 50%;
+  background: var(--soft); color: var(--muted);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; flex-shrink: 0;
+  transition: all 0.3s;
+}
+.step-item.active .step-num { background: var(--blue); color: #fff; box-shadow: 0 0 0 4px #DBEAFE; }
+.step-item.done .step-num   { background: var(--green); color: #fff; }
+.step-text { font-size: 12px; font-weight: 600; color: var(--muted); }
+.step-item.active .step-text { color: var(--blue); }
+.step-item.done .step-text   { color: var(--green); }
+.step-sep { flex: 1; height: 2px; background: var(--border); margin: 0 8px; transition: background 0.3s; }
+.step-sep.done { background: var(--green); }
+
+/* ── LAYOUT ── */
+.page-wrap { max-width: 1080px; margin: 0 auto; padding: 24px 20px 60px; }
+
+/* ── CARDS ── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+}
+.card-header {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--soft);
+}
+.card-header h3 { font-size: 14px; font-weight: 700; color: var(--ink); display: flex; align-items: center; gap: 8px; }
+.card-header .chip { font-size: 10px; font-weight: 700; padding: 2px 10px; border-radius: 20px; background: var(--blue); color: #fff; }
+.card-body { padding: 20px; }
+
+/* ── UPLOAD ── */
+.drop-zone {
+  border: 2px dashed var(--border);
+  border-radius: 10px;
+  padding: 36px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: var(--bg);
+  position: relative;
+}
+.drop-zone:hover, .drop-zone.over { border-color: var(--blue); background: var(--sky); }
+.drop-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+.drop-icon { font-size: 36px; margin-bottom: 8px; }
+.drop-title { font-size: 15px; font-weight: 700; color: var(--ink); margin-bottom: 4px; }
+.drop-sub { font-size: 12px; color: var(--muted); }
+.drop-file { margin-top: 10px; font-size: 12px; font-weight: 600; color: var(--blue); font-family: 'JetBrains Mono', monospace; }
+
+/* ── FILTER TAGS ── */
+.filter-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+.filter-section { background: var(--soft); border-radius: 8px; padding: 12px; }
+.filter-section h4 { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 8px; }
+.tags { display: flex; flex-wrap: wrap; gap: 5px; }
+.ftag { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 4px; }
+.ftag-x { background: #FEF2F2; color: var(--red); }
+.ftag-v { background: #F0FDF4; color: var(--green); }
+
+/* ── BUTTONS ── */
+.btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 9px 20px; border-radius: 8px;
+  font-size: 13px; font-weight: 600;
+  cursor: pointer; border: none; transition: all 0.18s;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+.btn-blue    { background: var(--blue); color: #fff; }
+.btn-blue:hover { background: #1D4ED8; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,0.25); }
+.btn-green   { background: var(--green); color: #fff; }
+.btn-green:hover { background: #15803D; transform: translateY(-1px); }
+.btn-orange  { background: var(--accent); color: #fff; }
+.btn-orange:hover { background: #EA6C00; transform: translateY(-1px); }
+.btn-ghost   { background: transparent; color: var(--blue); border: 1.5px solid var(--blue); }
+.btn-ghost:hover { background: var(--blue); color: #fff; }
+.btn-sm      { padding: 6px 14px; font-size: 12px; }
+.btn-xs      { padding: 4px 10px; font-size: 11px; border-radius: 6px; }
+.btn-row     { display: flex; gap: 10px; flex-wrap: wrap; }
+
+/* ── KPI STRIP ── */
+.kpi-strip { display: grid; grid-template-columns: repeat(5,1fr); gap: 10px; margin-bottom: 16px; }
+.kpi {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 12px 16px;
+  border-top: 3px solid var(--blue);
+}
+.kpi.k-green  { border-top-color: var(--green); }
+.kpi.k-orange { border-top-color: var(--accent); }
+.kpi.k-red    { border-top-color: var(--red); }
+.kpi.k-amber  { border-top-color: var(--amber); }
+.kpi-val { font-size: 22px; font-weight: 800; color: var(--ink); font-family: 'JetBrains Mono', monospace; }
+.kpi-lbl { font-size: 11px; color: var(--muted); font-weight: 500; margin-top: 1px; }
+
+/* ── TABLE ── */
+.tbl-box { overflow-x: auto; border-radius: 8px; border: 1px solid var(--border); }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+thead th { background: var(--navy); color: #fff; padding: 9px 12px; text-align: left; font-weight: 600; font-size: 11px; white-space: nowrap; }
+tbody tr { border-bottom: 1px solid var(--border); }
+tbody tr:last-child { border-bottom: none; }
+tbody tr:hover { background: var(--sky); }
+tbody td { padding: 8px 12px; vertical-align: middle; }
+.ph-row { background: #FFFBEB !important; }
+.b1-row { background: #F0F9FF; }
+.b2-row { background: #F0FDF4; }
+
+.pill { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 4px; }
+.p-ph   { background: #FEF3C7; color: #92400E; }
+.p-vdp  { background: #FCE7F3; color: #9D174D; }
+.p-lam  { background: #F5F3FF; color: #5B21B6; }
+.p-scr  { background: #ECFDF5; color: #065F46; }
+.p-foil { background: #FFFBEB; color: #92400E; }
+.p-2nd  { background: #EFF6FF; color: #1E40AF; }
+.p-jns  { background: var(--soft); color: var(--muted); border: 1px solid var(--border); }
+.p-urg  { background: #FEF2F2; color: var(--red); }
+.p-b1   { background: #DBEAFE; color: #1E40AF; }
+.p-b2   { background: #DCFCE7; color: #166534; }
+
+/* ── DAY CARDS ── */
+.day-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-bottom: 14px;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+}
+.day-card-head {
+  background: var(--navy);
+  padding: 12px 18px;
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+}
+.day-card-head .day-title { font-size: 14px; font-weight: 700; color: #fff; letter-spacing: 0.3px; }
+.day-card-head .day-meta  { font-size: 11px; color: #94A3B8; font-family: 'JetBrains Mono', monospace; }
+
+/* Shift bar */
+.shift-bar {
+  display: flex; flex-wrap: wrap; gap: 0;
+  background: #F8FAFC; border-bottom: 1px solid var(--border);
+  font-size: 11px; overflow: hidden;
+}
+.sb-item {
+  display: flex; align-items: center; gap: 5px;
+  padding: 7px 12px; font-weight: 600;
+  border-right: 1px solid var(--border);
+}
+.sb-item:last-child { border-right: none; margin-left: auto; }
+.sb-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.dot-s1 { background: var(--blue); }
+.dot-s2 { background: var(--green); }
+.dot-break { background: var(--amber); }
+.dot-change { background: var(--red); }
+.dot-speed { background: var(--accent); }
+
+/* Machine columns */
+.machines-grid { display: grid; grid-template-columns: 1fr 1fr; }
+.machine-pane { padding: 14px 16px; border-right: 1px solid var(--border); }
+.machine-pane:last-child { border-right: none; }
+.machine-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
+}
+.machine-badge {
+  font-size: 11px; font-weight: 700; padding: 3px 12px;
+  border-radius: 20px; letter-spacing: 0.5px;
+}
+.mb-b1 { background: #DBEAFE; color: #1E40AF; }
+.mb-b2 { background: #DCFCE7; color: #166534; }
+
+/* Job item */
+.job-item {
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 12px; margin-bottom: 8px;
+  border-left: 3px solid var(--blue);
+  transition: box-shadow 0.15s;
+}
+.job-item:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+.job-item.is-ph     { border-left-color: var(--accent); background: #FFFBEB; }
+.job-item.is-urgent { border-left-color: var(--red); background: #FEF2F2; }
+.job-name { font-size: 12px; font-weight: 600; color: var(--ink); margin-bottom: 5px; line-height: 1.4; }
+.job-meta { display: flex; flex-wrap: wrap; gap: 8px; font-size: 11px; color: var(--muted); }
+.job-time-row { display: flex; align-items: center; gap: 6px; margin-top: 5px; font-size: 11px; }
+.jtime { font-family: 'JetBrains Mono', monospace; font-weight: 600; color: var(--blue); font-size: 11px; }
+.no-job { font-size: 11px; color: #CBD5E1; text-align: center; padding: 12px 0; font-style: italic; }
+
+/* ── TABS ── */
+.tab-row { display: flex; gap: 3px; background: var(--soft); padding: 3px; border-radius: 8px; width: fit-content; margin-bottom: 14px; }
+.tab-btn { padding: 7px 18px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; color: var(--muted); transition: all 0.2s; }
+.tab-btn.on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+
+/* ── MODAL ── */
+.overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 200; }
+.overlay.show { display: flex; }
+.modal { background: var(--surface); border-radius: 14px; padding: 24px; width: 500px; max-width: 95vw; box-shadow: 0 20px 60px rgba(0,0,0,0.18); animation: pop 0.22s ease; }
+@keyframes pop { from { transform: scale(0.96) translateY(10px); opacity: 0; } to { transform: scale(1) translateY(0); opacity: 1; } }
+.modal-title { font-size: 16px; font-weight: 800; color: var(--ink); margin-bottom: 16px; }
+.fgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.fg { display: flex; flex-direction: column; gap: 4px; }
+.fg.full { grid-column: 1/-1; }
+.fg label { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+.fg input, .fg select { padding: 8px 10px; border: 1.5px solid var(--border); border-radius: 7px; font-size: 13px; font-family: 'Plus Jakarta Sans', sans-serif; outline: none; }
+.fg input:focus, .fg select:focus { border-color: var(--blue); }
+.modal-foot { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+
+/* ── TOAST ── */
+.toast { position: fixed; bottom: 20px; right: 20px; background: var(--ink); color: #fff; padding: 11px 18px; border-radius: 8px; font-size: 13px; font-weight: 500; transform: translateY(60px); opacity: 0; transition: all 0.25s; z-index: 300; border-left: 3px solid var(--accent); max-width: 320px; }
+.toast.show { transform: translateY(0); opacity: 1; }
+
+.info-strip { background: var(--sky); border: 1px solid #BFDBFE; border-radius: 8px; padding: 10px 14px; font-size: 12px; color: #1E40AF; margin-bottom: 14px; display: flex; gap: 7px; align-items: flex-start; }
+.hidden { display: none !important; }
+.gap { margin-top: 12px; }
+.toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="topbar-brand">
+    <div class="topbar-logo">A</div>
+    <div>
+      <div class="topbar-name">AIA <span>Industries</span></div>
+    </div>
+  </div>
+  <div class="topbar-date" id="topDate"></div>
+</div>
+
+<!-- STEPPER -->
+<div class="stepper-wrap">
+  <div class="stepper">
+    <div class="step-item active" id="si1">
+      <div class="step-num">1</div>
+      <div class="step-text">Upload & Clean</div>
+    </div>
+    <div class="step-sep" id="sep1"></div>
+    <div class="step-item" id="si2">
+      <div class="step-num">2</div>
+      <div class="step-text">Review & Download</div>
+    </div>
+    <div class="step-sep" id="sep2"></div>
+    <div class="step-item" id="si3">
+      <div class="step-num">3</div>
+      <div class="step-text">Day-by-Day Schedule</div>
+    </div>
+  </div>
+</div>
+
+<div class="page-wrap">
+
+  <!-- PAGE 1 -->
+  <div id="pg1">
+    <div class="card">
+      <div class="card-header"><h3>📂 Upload Raw Data</h3><span class="chip">CSV</span></div>
+      <div class="card-body">
+        <div class="info-strip">ℹ️ Raw CSV upload karo — system auto clean karega: Status filter → Printing done check → Punching pending check.</div>
+        <div class="drop-zone" id="dropZone">
+          <input type="file" id="fileIn" accept=".csv" onchange="loadFile(this)">
+          <div class="drop-icon">📂</div>
+          <div class="drop-title">CSV Drop Karo Ya Click Karo</div>
+          <div class="drop-sub">AIA Track Record CSV format</div>
+          <div class="drop-file" id="dropFile"></div>
+        </div>
+        <div id="filterPanel" class="hidden gap">
+          <div class="filter-row">
+            <div class="filter-section"><h4>❌ Excluded Status</h4><div class="tags" id="xTags"></div></div>
+            <div class="filter-section"><h4>✅ Included Status</h4><div class="tags" id="vTags"></div></div>
+          </div>
+          <div style="background:var(--sky);border:1px solid #BFDBFE;border-radius:8px;padding:12px 16px;margin-top:12px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+            <span style="font-size:12px;font-weight:700;color:#1E40AF;">📅 Schedule Start Date</span>
+            <input type="date" id="startDateInput" style="padding:7px 12px;border:1.5px solid #BFDBFE;border-radius:7px;font-size:13px;font-family:inherit;outline:none;color:#1E40AF;font-weight:600;background:#fff;">
+            <span style="font-size:11px;color:#64748B;">Default: Today. Badlo agar alag date se start karna ho.</span>
+          </div>
+          <div class="btn-row gap"><button class="btn btn-blue" onclick="processCSV()">🧹 Clean & Process</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAGE 2 -->
+  <div id="pg2" class="hidden">
+    <div class="kpi-strip" id="kpi2"></div>
+    <div class="card">
+      <div class="card-header"><h3>✅ Cleaned Data</h3><span class="chip" id="cnt2">0 Jobs</span></div>
+      <div class="card-body">
+        <div class="info-strip">ℹ️ Printing ✅ + Punching pending ✅ — yeh jobs schedule ke liye ready hain.</div>
+        <div class="btn-row" style="margin-bottom:14px;">
+          <button class="btn btn-green" onclick="dlClean()">⬇️ Download Clean CSV</button>
+          <button class="btn btn-blue" onclick="buildSchedule()">📅 Generate Schedule →</button>
+          <button class="btn btn-ghost" onclick="goPg(1)">← Back</button>
+        </div>
+        <div class="tbl-box">
+          <table>
+            <thead><tr><th>#</th><th>JCNO</th><th>Date</th><th>Customer</th><th>Job Name</th><th>Qty</th><th>Carton Dim</th><th>Item Class</th><th>Punch Detail</th><th>Status</th><th>Commit Date</th></tr></thead>
+            <tbody id="tb2"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAGE 3 -->
+  <div id="pg3" class="hidden">
+    <div class="kpi-strip" id="kpi3"></div>
+    <div class="toolbar">
+      <div class="tab-row">
+        <div class="tab-btn on" onclick="setTab('day')">📅 Day-wise</div>
+        <div class="tab-btn" onclick="setTab('tbl')">📋 Table</div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-orange btn-sm" onclick="openModal()">⚡ Add Urgent Job</button>
+        <button class="btn btn-green btn-sm" onclick="dlAllDays()">⬇️ Download All Days</button>
+        <button class="btn btn-ghost btn-sm" onclick="goPg(2)">← Back</button>
+      </div>
+    </div>
+    <div id="vDay"><div id="dayCards"></div></div>
+    <div id="vTbl" class="hidden">
+      <div class="card">
+        <div class="card-header"><h3>📋 Full Schedule</h3></div>
+        <div class="tbl-box">
+          <table>
+            <thead><tr><th>Sr</th><th>JCNO</th><th>Customer</th><th>Job Name</th><th>Qty</th><th>Cut Sheet</th><th>Carton Dim</th><th>Status</th><th>Machine</th><th>Make Ready</th><th style="background:#92400E;">MR Start Time</th><th style="background:#92400E;">MR Date</th><th style="background:#1E40AF;">Prod Start Time</th><th style="background:#1E40AF;">Prod Date</th><th style="background:#166534;">Complete Time</th><th style="background:#166534;">Complete Date</th></tr></thead>
+            <tbody id="tb3"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- URGENT MODAL -->
+<div class="overlay" id="modal">
+  <div class="modal">
+    <div class="modal-title">⚡ Add Urgent Job</div>
+    <div class="fgrid">
+      <div class="fg full"><label>Job Name *</label><input id="u_name" placeholder="Enter full job name"></div>
+      <div class="fg"><label>JCNO</label><input id="u_jcno" placeholder="25JA/9999"></div>
+      <div class="fg"><label>Customer</label><input id="u_cust" placeholder="Customer name"></div>
+      <div class="fg"><label>Job Qty *</label><input id="u_qty" type="number" placeholder="10000"></div>
+      <div class="fg"><label>Carton Dimension</label><input id="u_dim" placeholder="68 x 28 x 77"></div>
+      <div class="fg"><label>Machine</label>
+        <select id="u_mach"><option value="auto">Auto (Earliest Free)</option><option value="B1">Force B1</option><option value="B2">Force B2</option></select>
+      </div>
+      <div class="fg"><label>Position</label>
+        <select id="u_pos"><option value="next">After Current Job</option><option value="top">At Top (First)</option></select>
+      </div>
+      <div class="fg"><label>Punch Detail</label><input id="u_punch" placeholder="Punching Die No: 123"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost btn-sm" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-orange btn-sm" onclick="addUrgent()">⚡ Add to Schedule</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ════════════════════════════════════
+// CONSTANTS
+// ════════════════════════════════════
+const EXCL = ['DD','CANCELLED','SHORT CLOSE','Plain Carton','RD','HOLD',
+  'Schedule Later','GUMMING','SHORT DISPATCH','Out Source','ROLL FORM',
+  'APPROVAL REQ','RIGID','REJECTED','REJECTED ','TRAY','SHADE CARD APPROVAL PENDING','PASTING'];
+const INCL = ['PH','VDP','LAMINATION','SCREEN','FOIL','2ND PASS','FRONT BAL','Job Not Started','UV','BACK SIDE','FOLD'];
+const DUMMY = ['01/01/1900','02/01/1900','03/01/1900','00/01/1900'];
+
+// Shift timings (wall clock minutes from 00:00)
+const S1_START  = 7*60;        // 07:00 AM
+const S1_LUNCH_S= 13*60+30;    // 01:30 PM
+const S1_LUNCH_E= 14*60;       // 02:00 PM
+const S1_END    = 18*60+30;    // 06:30 PM
+const S2_START  = 19*60;       // 07:00 PM
+const S2_DIN_S  = 22*60;       // 10:00 PM
+const S2_DIN_E  = 22*60+30;    // 10:30 PM
+const S2_END    = 6*60+30;     // 06:30 AM (next day)
+
+// Working minutes per shift = total span - breaks
+const S1_WORK = (S1_END - S1_START) - 30;            // 11.5hr - 30min lunch = 660
+const S2_WORK = (24*60 - S2_START + S2_END) - 30;    // 11.5hr - 30min dinner = 660
+const DAY_WORK = S1_WORK + S2_WORK;                  // 1320 = 22hrs ✅
+
+const SPEED   = 5000 / 60;   // cut sheets/min (5000 cut sheets per hour)
+const MR_NEW  = 90;           // make ready new dim
+const MR_SAME = 10;           // make ready same dim
+let BASE = new Date(); BASE.setHours(0,0,0,0); // Today's date — set when CSV is uploaded
+
+let clean = [], sched = [];
+
+// ════════════════════════════════════
+// INIT
+// ════════════════════════════════════
+document.getElementById('topDate').textContent =
+  new Date().toLocaleDateString('en-IN',{weekday:'short',day:'2-digit',month:'short',year:'numeric'});
+document.getElementById('xTags').innerHTML = EXCL.map(s=>`<span class="ftag ftag-x">${s}</span>`).join('');
+document.getElementById('vTags').innerHTML = INCL.map(s=>`<span class="ftag ftag-v">${s}</span>`).join('');
+// Set today as default in date picker
+const todayISO = new Date().toISOString().slice(0,10);
+document.getElementById('startDateInput').value = todayISO;
+
+const dz = document.getElementById('dropZone');
+dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('over');});
+dz.addEventListener('dragleave',()=>dz.classList.remove('over'));
+dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('over');if(e.dataTransfer.files[0])handleFile(e.dataTransfer.files[0]);});
+
+function loadFile(inp){if(inp.files[0])handleFile(inp.files[0]);}
+function handleFile(f){
+  document.getElementById('dropFile').textContent='📄 '+f.name;
+  document.getElementById('filterPanel').classList.remove('hidden');
+  window._file=f;
+  toast('✅ File loaded: '+f.name);
+}
+
+// ════════════════════════════════════
+// PROCESS CSV
+// ════════════════════════════════════
+function processCSV(){
+  if(!window._file){toast('⚠️ File upload karo!');return;}
+  Papa.parse(window._file,{header:true,skipEmptyLines:true,complete(res){
+    let rows=res.data.map(r=>{
+      let n={};
+      Object.keys(r).forEach(k=>{n[k.replace(/\n/g,' ').trim()]=(r[k]||'').toString().trim();});
+      return n;
+    });
+    function g(r,...ks){for(let k of ks)if(r[k]!==undefined&&r[k]!=='')return r[k];return '';}
+    // Filters
+    let f=rows
+      .filter(r=>!EXCL.includes(g(r,'Job_Status','Job Status')))
+      .filter(r=>{let pd=g(r,'Printing date'),np=g(r,'NextProcess');return(pd&&!DUMMY.includes(pd))||np==='Punching';})
+      .filter(r=>{let p=g(r,'punching');return!p||DUMMY.includes(p);});
+
+    clean=f.map((r,i)=>({
+      sr:i+1, jcno:g(r,'JCNO'), docDate:g(r,'Doc Date'),
+      cust:g(r,'CUSTOMER NAME'), name:g(r,'JobName','Job Name'),
+      qty:parseFloat(g(r,'Job Qty'))||0, po:g(r,'PONO','PO No'),
+      cut:parseFloat(g(r,'Tot. Cut    SH','Tot. Cut SH','Total Cut Sheet'))||0,
+      dim:g(r,'CartonDim.','Carton Dim','CartonDim')||'Unknown',
+      cls:g(r,'Item Class'), punch:g(r,'PunchDetail','Punch Detail')||'Punching',
+      status:g(r,'Job_Status','Job Status'), commit:g(r,'Commit Date'), urgent:false
+    }));
+    // Set BASE from date picker (default = today)
+    const chosenDate = document.getElementById('startDateInput').value;
+    BASE = chosenDate ? new Date(chosenDate + 'T00:00:00') : new Date();
+    BASE.setHours(0,0,0,0);
+    renderPg2();
+  }});
+}
+
+// ════════════════════════════════════
+// PAGE 2
+// ════════════════════════════════════
+function renderPg2(){
+  goPg(2);
+  let tq=clean.reduce((a,r)=>a+r.qty,0);
+  let tc=clean.reduce((a,r)=>a+r.cut,0);
+  let ph=clean.filter(r=>r.status==='PH').length;
+  let dims=new Set(clean.map(r=>r.dim)).size;
+  document.getElementById('kpi2').innerHTML=`
+    <div class="kpi"><div class="kpi-val">${clean.length}</div><div class="kpi-lbl">Total Jobs</div></div>
+    <div class="kpi k-orange"><div class="kpi-val">${ph}</div><div class="kpi-lbl">PH Priority</div></div>
+    <div class="kpi k-green"><div class="kpi-val">${tq.toLocaleString()}</div><div class="kpi-lbl">Total Job Qty</div></div>
+    <div class="kpi k-amber"><div class="kpi-val">${tc.toLocaleString()}</div><div class="kpi-lbl">Total Cut Sheet</div></div>
+    <div class="kpi"><div class="kpi-val">${dims}</div><div class="kpi-lbl">Unique Dims</div></div>`;
+  document.getElementById('cnt2').textContent=clean.length+' Jobs';
+  document.getElementById('tb2').innerHTML=clean.map((r,i)=>`
+    <tr class="${r.status==='PH'?'ph-row':''}">
+      <td>${i+1}</td><td><b>${r.jcno}</b></td><td>${r.docDate}</td><td>${r.cust}</td>
+      <td style="max-width:200px;">${r.name}</td><td>${r.qty.toLocaleString()}</td>
+      <td><b>${r.dim}</b></td><td>${r.cls}</td><td>${r.punch}</td>
+      <td><span class="pill ${pc(r.status)}">${r.status}</span></td><td>${r.commit}</td>
+    </tr>`).join('');
+  toast(`✅ ${clean.length} jobs ready!`);
+}
+
+// ════════════════════════════════════════════════════════
+// TIME ENGINE — Sunday-aware, break-aware absolute minutes
+//
+// We work in "absolute wall-clock minutes since BASE 07:00 AM"
+// but we skip Sundays entirely.
+//
+// A working "day slot" = one non-Sunday calendar day
+// Each day has these working windows (wall clock):
+//   Shift 1:  07:00–13:30  = 390 min
+//   [Lunch:   13:30–14:00  = 30 min  — skipped]
+//   Shift 1b: 14:00–18:30  = 270 min
+//   [Shift Chg:18:30–19:00 = 30 min  — skipped]
+//   Shift 2:  19:00–22:00  = 180 min
+//   [Dinner:  22:00–22:30  = 30 min  — skipped]
+//   Shift 2b: 22:30–06:30  = 480 min (crosses midnight)
+//   [Shift Chg:06:30–07:00 = 30 min  — skipped]
+//   Total working = 390+270+180+480 = 1320 min = 22 hrs ✅
+//
+// We store machine availability as "working minutes elapsed
+// since start of BASE day" — a continuous counter that
+// auto-skips Sunday and breaks when converting to wall clock.
+// ════════════════════════════════════════════════════════
+
+// Working segments per day (wall-clock minutes within that calendar day)
+// Each segment: [start_wall, end_wall, shift_name]
+// Note shift 2b crosses midnight → handled specially
+const SEGS = [
+  [7*60,       13*60+30,  'Shift 1'],   // 07:00–13:30  390 min
+  [14*60,      18*60+30,  'Shift 1'],   // 14:00–18:30  270 min
+  [19*60,      22*60,     'Shift 2'],   // 19:00–22:00  180 min
+  [22*60+30,   24*60,     'Shift 2'],   // 22:30–24:00  90 min  (first part of overnight)
+  [0,          6*60+30,   'Shift 2'],   // 00:00–06:30  390 min (second part, next calendar day)
+];
+// Per working day, the working minutes layout:
+// seg0: 0–390   (07:00–13:30)
+// seg1: 390–660 (14:00–18:30)
+// seg2: 660–840 (19:00–22:00)
+// seg3: 840–930 (22:30–24:00)  → calendar day boundary
+// seg4: 930–1320(00:00–06:30)  → belongs to next calendar day
+const SEG_WM = [0, 390, 660, 840, 930, 1320]; // cumulative working mins at start of each seg
+
+// Get the Nth working day from BASE (0-indexed), skipping Sundays
+function workingDay(n){
+  let d=new Date(BASE); d.setHours(0,0,0,0);
+  let count=0;
+  while(true){
+    if(d.getDay()!==0){ // 0=Sunday
+      if(count===n) return new Date(d);
+      count++;
+    }
+    d.setDate(d.getDate()+1);
+  }
+}
+
+// Convert working minutes (continuous, Sunday-skipped) → wall clock info
+function wm2clock(wmTotal){
+  // Which working day and minute-within-day
+  let dayIdx = Math.floor(wmTotal / DAY_WORK);
+  let md     = wmTotal % DAY_WORK;
+
+  // Get the calendar date for this working day
+  let calDay = workingDay(dayIdx);
+
+  // Find which segment md falls in
+  let segIdx=0;
+  for(let i=0;i<SEG_WM.length-1;i++){
+    if(md >= SEG_WM[i] && md < SEG_WM[i+1]){ segIdx=i; break; }
+  }
+
+  let segOffset = md - SEG_WM[segIdx];
+  let wall, shift, dateForDisplay;
+
+  if(segIdx <= 2){
+    // Segments 0,1,2: same calendar day as working day
+    wall = SEGS[segIdx][0] + segOffset;
+    shift = SEGS[segIdx][2];
+    dateForDisplay = new Date(calDay);
+  } else if(segIdx === 3){
+    // seg3: 22:30 onwards — same calendar day
+    wall = SEGS[3][0] + segOffset;
+    shift = 'Shift 2';
+    dateForDisplay = new Date(calDay);
+  } else {
+    // seg4: 00:00–06:30 — next calendar day (but still belongs to this working day's shift 2)
+    // We need to advance to next calendar day (which might be Sunday — but Shift 2 rolls into next day)
+    wall = segOffset; // 00:00 + offset
+    shift = 'Shift 2';
+    dateForDisplay = new Date(calDay);
+    dateForDisplay.setDate(dateForDisplay.getDate()+1);
+    // If that next day is Sunday, it's still just display — the shift started Saturday night
+  }
+
+  return {
+    ds:  dateForDisplay.toLocaleDateString('en-IN',{weekday:'short',day:'2-digit',month:'short',year:'numeric'}),
+    key: dateForDisplay.toISOString().slice(0,10),
+    shift,
+    ts:  ampm(wall)
+  };
+}
+
+function ampm(m){
+  let h24=Math.floor(m/60)%24, mn=Math.floor(m%60);
+  let p=h24<12?'AM':'PM', h=h24%12||12;
+  return `${String(h).padStart(2,'0')}:${String(mn).padStart(2,'0')} ${p}`;
+}
+
+// ════════════════════════════════════
+// SCHEDULE — truly continuous, Sunday-skip, job never switches machine
+// ════════════════════════════════════
+function buildSchedule(){
+  if(!clean.length){toast('⚠️ Data nahi hai!');return;}
+
+  // Sort: PH first → carton dim group → qty desc
+  let sorted=[...clean].sort((a,b)=>{
+    if((a.status==='PH')!==(b.status==='PH')) return a.status==='PH'?-1:1;
+    if(a.dim!==b.dim) return a.dim.localeCompare(b.dim);
+    return b.qty-a.qty;
+  });
+
+  // Each machine tracks: wm = working minutes elapsed (continuous, Sunday-skipped)
+  let M={
+    B1:{wm:0, lastDim:null},
+    B2:{wm:0, lastDim:null}
+  };
+
+  sched=sorted.map((job,i)=>{
+    let qty=Math.max(job.qty,1), dim=job.dim;
+    let cutSh=Math.max(job.cut||1, 1); // use cut sheet for production time
+    let mName=M.B1.wm<=M.B2.wm?'B1':'B2';
+    let m=M[mName];
+    let mr=m.lastDim===dim?MR_SAME:MR_NEW;
+    let proc=cutSh/SPEED; // Production Time = Cut Sheet ÷ 5000 × 60 min
+    // Three key times:
+    // mrStartWM   = machine free → make ready begins
+    // prodStartWM = make ready done → punching starts
+    // eWM         = job complete
+    let mrStartWM   = m.wm;
+    let prodStartWM = mrStartWM + mr;
+    let eWM         = prodStartWM + proc;
+    let mrI  = wm2clock(mrStartWM);
+    let psI  = wm2clock(prodStartWM);
+    let eI   = wm2clock(eWM);
+    m.wm=eWM; m.lastDim=dim;
+    return{
+      ...job, sr:i+1, mach:mName,
+      mr, mrLabel:mr===MR_SAME?`Same Dim (${MR_SAME} min)`:`New Dim (${MR_NEW} min)`,
+      proc:Math.round(proc),
+      mrTime:mrI.ts,  mrDate:mrI.ds,  mrKey:mrI.key,  mrShift:mrI.shift,
+      psTime:psI.ts,  psDate:psI.ds,  psKey:psI.key,  psShift:psI.shift,
+      eTime:eI.ts,    eDate:eI.ds,    eKey:eI.key,    eShift:eI.shift,
+      sKey:mrI.key, sDate:mrI.ds
+    };
+  });
+
+  renderPg3(); goPg(3);
+}
+
+// ════════════════════════════════════
+// PAGE 3 RENDER
+// ════════════════════════════════════
+function renderPg3(){
+  let b1=sched.filter(j=>j.mach==='B1'), b2=sched.filter(j=>j.mach==='B2');
+  let same=sched.filter(j=>j.mr===MR_SAME).length;
+  let tcut=sched.reduce((a,j)=>a+j.cut,0);
+  let startDateStr = BASE.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+  document.getElementById('kpi3').innerHTML=`
+    <div class="kpi k-green"><div class="kpi-val">${sched.length}</div><div class="kpi-lbl">Total Jobs</div></div>
+    <div class="kpi"><div class="kpi-val">${b1.length}</div><div class="kpi-lbl">B1 Jobs</div></div>
+    <div class="kpi"><div class="kpi-val">${b2.length}</div><div class="kpi-lbl">B2 Jobs</div></div>
+    <div class="kpi k-amber"><div class="kpi-val">${tcut.toLocaleString()}</div><div class="kpi-lbl">Total Cut Sheet</div></div>
+    <div class="kpi k-orange"><div class="kpi-val" style="font-size:14px;">${startDateStr}</div><div class="kpi-lbl">📅 Schedule Start</div></div>`;
+  renderDays(); renderTable3();
+}
+
+function renderDays(){
+  // Group by start date
+  let map={};
+  sched.forEach(j=>{
+    if(!map[j.sKey]) map[j.sKey]={ds:j.sDate,B1:[],B2:[]};
+    map[j.sKey][j.mach].push(j);
+  });
+  let days=Object.entries(map).sort((a,b)=>new Date(a[0])-new Date(b[0]));
+
+  document.getElementById('dayCards').innerHTML=days.map(([key,d])=>{
+    let all=[...d.B1,...d.B2];
+    let tq=all.reduce((a,j)=>a+j.qty,0);
+    let tc=all.reduce((a,j)=>a+j.cut,0);
+    return `
+    <div class="day-card">
+      <div class="day-card-head">
+        <div>
+          <div class="day-title">📅 ${d.ds}</div>
+          <div class="day-meta">Jobs: ${all.length} &nbsp;|&nbsp; Qty: ${tq.toLocaleString()} &nbsp;|&nbsp; Cut Sheet: ${tc.toLocaleString()}</div>
+        </div>
+        <button class="btn btn-green btn-xs" onclick="dlDay('${key}')">⬇️ Excel</button>
+      </div>
+      <div class="shift-bar">
+        <div class="sb-item"><span class="sb-dot dot-s1"></span>Shift 1: 07:00 AM</div>
+        <div class="sb-item"><span class="sb-dot dot-break"></span>Lunch: 01:30–02:00 PM</div>
+        <div class="sb-item"><span class="sb-dot dot-change"></span>Shift Change: 06:30–07:00 PM</div>
+        <div class="sb-item"><span class="sb-dot dot-s2"></span>Shift 2: 07:00 PM</div>
+        <div class="sb-item"><span class="sb-dot dot-break"></span>Dinner: 10:00–10:30 PM</div>
+        <div class="sb-item"><span class="sb-dot dot-change"></span>Shift Change: 06:30–07:00 AM</div>
+        <div class="sb-item" style="margin-left:auto;"><span class="sb-dot dot-speed"></span>22 hrs | 5,000 cut sheets/hr</div>
+      </div>
+      <div class="machines-grid">
+        <div class="machine-pane">
+          <div class="machine-head">
+            <span class="machine-badge mb-b1">🔵 Machine B1</span>
+            <span style="font-size:10px;color:var(--muted);">${d.B1.length} job${d.B1.length!==1?'s':''}</span>
+          </div>
+          ${d.B1.length?d.B1.map(jCard).join(''):'<div class="no-job">— No jobs on this date —</div>'}
+        </div>
+        <div class="machine-pane">
+          <div class="machine-head">
+            <span class="machine-badge mb-b2">🟢 Machine B2</span>
+            <span style="font-size:10px;color:var(--muted);">${d.B2.length} job${d.B2.length!==1?'s':''}</span>
+          </div>
+          ${d.B2.length?d.B2.map(jCard).join(''):'<div class="no-job">— No jobs on this date —</div>'}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function jCard(j){
+  let cls=j.urgent?'is-urgent':j.status==='PH'?'is-ph':'';
+  let tag=j.urgent?'⚡ ':j.status==='PH'?'🟠 ':'';
+  let multiDay=j.eKey!==j.sKey;
+  let procHrs=(j.proc/60).toFixed(1);
+  let totalHrs=((j.mr+j.proc)/60).toFixed(1);
+  return `<div class="job-item ${cls}">
+    <div class="job-name">${tag}${j.name}</div>
+    <div class="job-meta">
+      <span>📋 ${j.jcno}</span>
+      <span>📦 ${j.qty.toLocaleString()} pcs</span>
+      <span>📐 ${j.dim}</span>
+    </div>
+    <div style="margin-top:8px;display:flex;flex-direction:column;gap:4px;">
+      <div style="display:flex;align-items:center;gap:0;border-radius:6px;overflow:hidden;font-size:11px;border:1px solid var(--border);">
+        <div style="background:#FEF9C3;padding:5px 10px;flex:1;border-right:1px solid var(--border);">
+          <div style="font-size:9px;font-weight:700;color:#92400E;text-transform:uppercase;letter-spacing:0.5px;">🔧 Make Ready (${j.mr} min)</div>
+          <div style="font-weight:700;color:#92400E;margin-top:1px;">${j.mrTime}</div>
+          <div style="font-size:10px;color:#A16207;">${j.mrDate}</div>
+        </div>
+        <div style="background:#DBEAFE;padding:5px 10px;flex:1;border-right:1px solid var(--border);">
+          <div style="font-size:9px;font-weight:700;color:#1E40AF;text-transform:uppercase;letter-spacing:0.5px;">⚙️ Production Start</div>
+          <div style="font-weight:700;color:#1E40AF;margin-top:1px;">${j.psTime}</div>
+          <div style="font-size:10px;color:#3B82F6;">${j.psDate}</div>
+        </div>
+        <div style="background:${multiDay?'#FFF7ED':'#DCFCE7'};padding:5px 10px;flex:1;">
+          <div style="font-size:9px;font-weight:700;color:${multiDay?'#9A3412':'#166534'};text-transform:uppercase;letter-spacing:0.5px;">✅ Job Complete ${multiDay?'🔁':''}</div>
+          <div style="font-weight:700;color:${multiDay?'var(--accent)':'var(--green)'};margin-top:1px;">${j.eTime}</div>
+          <div style="font-size:10px;color:${multiDay?'#EA580C':'#16A34A'};">${j.eDate}</div>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--muted);display:flex;gap:12px;padding:0 2px;">
+        <span>${j.mrShift}</span>
+        <span>Total: ${totalHrs} hrs (${j.mr} min MR + ${procHrs} hrs production)</span>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderTable3(){
+  document.getElementById('tb3').innerHTML=sched.map(j=>`
+    <tr class="${j.mach==='B1'?'b1-row':'b2-row'}${j.status==='PH'?' ph-row':''}">
+      <td>${j.sr}</td>
+      <td><b>${j.jcno}</b></td>
+      <td>${j.cust}</td>
+      <td style="max-width:150px;">${j.urgent?'⚡ ':''}${j.name}</td>
+      <td>${j.qty.toLocaleString()}</td>
+      <td>${j.cut.toLocaleString()}</td>
+      <td>${j.dim}</td>
+      <td><span class="pill ${pc(j.status)}">${j.status}</span></td>
+      <td><span class="pill ${j.mach==='B1'?'p-b1':'p-b2'}">${j.mach}</span></td>
+      <td>${j.mrLabel}</td>
+      <td style="background:#FEF9C3;"><b>${j.mrTime}</b></td>
+      <td style="background:#FEF9C3;">${j.mrDate}</td>
+      <td style="background:#DBEAFE;"><b>${j.psTime}</b></td>
+      <td style="background:#DBEAFE;">${j.psDate}</td>
+      <td style="background:#DCFCE7;"><b>${j.eTime}</b></td>
+      <td style="background:#DCFCE7;">${j.eDate}</td>
+    </tr>`).join('');
+}
+
+// ════════════════════════════════════
+// EXCEL DOWNLOAD — PER DAY
+// ════════════════════════════════════
+function dlDay(key){
+  // Jobs that START on this day
+  let startJobs = sched.filter(j => j.sKey === key);
+  // Jobs that are IN PROGRESS on this day (started earlier, not yet complete)
+  let inProgressJobs = sched.filter(j => j.sKey !== key && j.eKey >= key && j.mrKey <= key);
+
+  if(!startJobs.length && !inProgressJobs.length){
+    toast('⚠️ Koi job nahi is din ke liye!'); return;
+  }
+
+  let dayDate = startJobs.length ? startJobs[0].sDate : inProgressJobs[0].eDate;
+  let wb = XLSX.utils.book_new();
+
+  // ── HDR ──
+  let HDR=['Sr No','JCNO','Customer Name','Job Name','Job Qty','Total Cut Sheet',
+    'Carton Dimension','Item Class','Punch Detail','Job Status','Commit Date',
+    'Machine','Make Ready Type','MR Start Time','MR Start Date','MR Shift',
+    'Production Start Time','Production Start Date','Production Shift',
+    'Job Complete Time','Job Complete Date','Complete Shift','Remarks'];
+
+  // Full rows for jobs starting today
+  let startRows = startJobs.map(j=>[
+    j.sr, j.jcno, j.cust, j.name, j.qty, j.cut,
+    j.dim, j.cls, j.punch, j.status, j.commit,
+    j.mach, j.mrLabel,
+    j.mrTime, j.mrDate, j.mrShift,
+    j.psTime, j.psDate, j.psShift,
+    j.eTime, j.eDate, j.eShift,
+    j.sKey === j.eKey ? '✅ Completes Today' : `⏳ Continues till ${j.eDate}`
+  ]);
+
+  // Minimal rows for in-progress jobs (started earlier)
+  let ipRows = inProgressJobs.map(j=>[
+    j.sr, j.jcno, j.cust, j.name, j.qty, j.cut,
+    j.dim, j.cls, j.punch, j.status, j.commit,
+    j.mach, '— IN PROGRESS —',
+    j.mrTime, j.mrDate, j.mrShift,
+    j.psTime, j.psDate, j.psShift,
+    j.eTime, j.eDate, j.eShift,
+    `🔄 Started ${j.mrDate} — Completes ${j.eDate}`
+  ]);
+
+  let rows = [...startRows, ...ipRows];
+
+  let ws=XLSX.utils.aoa_to_sheet([HDR,...rows]);
+  // Column widths
+  ws['!cols']=[{wch:5},{wch:13},{wch:24},{wch:34},{wch:10},{wch:12},{wch:18},{wch:12},
+    {wch:20},{wch:14},{wch:10},{wch:13},{wch:14},{wch:12},{wch:13},{wch:14},{wch:12},{wch:13},{wch:14},{wch:12},{wch:13},{wch:14}];
+
+  // Color header row
+  let headerColors = {
+    A1:'1C3557',B1:'1C3557',C1:'1C3557',D1:'1C3557',E1:'1C3557',F1:'1C3557',
+    G1:'1C3557',H1:'1C3557',I1:'1C3557',J1:'1C3557',K1:'1C3557',L1:'1C3557',
+    M1:'1C3557',
+    N1:'92400E',O1:'92400E',P1:'92400E',   // Make Ready — amber
+    Q1:'1E40AF',R1:'1E40AF',S1:'1E40AF',   // Prod Start — blue
+    T1:'166534',U1:'166534',V1:'166534'    // Complete — green
+  };
+  Object.entries(headerColors).forEach(([cell, bgHex])=>{
+    if(!ws[cell]) return;
+    ws[cell].s = {
+      font:{bold:true,color:{rgb:'FFFFFF'},sz:10},
+      fill:{fgColor:{rgb:bgHex}},
+      alignment:{horizontal:'center',wrapText:true},
+      border:{bottom:{style:'medium',color:{rgb:'FFFFFF'}}}
+    };
+  });
+
+  // Color data rows — in-progress rows get a distinct orange tint
+  for(let r=2;r<=rows.length+1;r++){
+    let isInProgress = r > startRows.length + 1;
+    let isB1 = ws['L'+r] && ws['L'+r].v==='B1';
+    let isPH = ws['J'+r] && ws['J'+r].v==='PH';
+    let rowBg = isInProgress ? 'FFF7ED' : (isB1?'DBEAFE':'DCFCE7');
+    if(isPH && !isInProgress) rowBg='FEF3C7';
+
+    ['A','B','C','D','E','F','G','H','I','J','K','L','M'].forEach(col=>{
+      let cell=col+r;
+      if(ws[cell]) ws[cell].s={fill:{fgColor:{rgb:rowBg}},font:{sz:9},alignment:{horizontal:'left'}};
+    });
+    // MR columns — yellow tint
+    ['N','O','P'].forEach(col=>{
+      let cell=col+r;
+      if(ws[cell]) ws[cell].s={fill:{fgColor:{rgb:'FEFCE8'}},font:{bold:col==='N',sz:9,color:{rgb:'92400E'}}};
+    });
+    // Prod Start — blue tint
+    ['Q','R','S'].forEach(col=>{
+      let cell=col+r;
+      if(ws[cell]) ws[cell].s={fill:{fgColor:{rgb:'EFF6FF'}},font:{bold:col==='Q',sz:9,color:{rgb:'1E40AF'}}};
+    });
+    // Complete — green tint
+    ['T','U','V'].forEach(col=>{
+      let cell=col+r;
+      if(ws[cell]) ws[cell].s={fill:{fgColor:{rgb:'F0FDF4'}},font:{bold:col==='T',sz:9,color:{rgb:'166534'}}};
+    });
+  }
+
+  XLSX.utils.book_append_sheet(wb, ws, 'Punching Schedule');
+
+  // ── Sheet 2: Day Summary ──
+  let allDayJobs = [...startJobs, ...inProgressJobs];
+  let b1j=allDayJobs.filter(j=>j.mach==='B1'), b2j=allDayJobs.filter(j=>j.mach==='B2');
+  let sumRows=[
+    ['AIA INDUSTRIES — DAILY PUNCHING SCHEDULE SUMMARY',''],['',''],
+    ['Date', dayDate],['Generated', new Date().toLocaleDateString('en-IN')],['',''],
+    ['── SHIFT TIMINGS ──',''],
+    ['Shift 1 Start', '07:00 AM'],
+    ['Lunch Break', '01:30 PM – 02:00 PM (30 min)'],
+    ['Shift Change', '06:30 PM – 07:00 PM (30 min)'],
+    ['Shift 2 Start', '07:00 PM'],
+    ['Dinner Break', '10:00 PM – 10:30 PM (30 min)'],
+    ['Shift Change', '06:30 AM – 07:00 AM (30 min)'],
+    ['Total Working Hours', '22 Hours / Day'],
+    ['Machine Speed', '5,000 cut sheets / hour (production time = Cut Sheet ÷ 5000 × 60 min)'],['',''],
+    ['── PRODUCTION SUMMARY ──',''],
+    ['Jobs Starting Today', startJobs.length],
+    ['Jobs In Progress (carried over)', inProgressJobs.length],
+    ['Total Active Jobs Today', allDayJobs.length],
+    ['Machine B1 Jobs', b1j.length],
+    ['Machine B2 Jobs', b2j.length],
+    ['Total Job Qty (starting today)', startJobs.reduce((a,j)=>a+j.qty,0)],
+    ['Total Cut Sheet (starting today)', startJobs.reduce((a,j)=>a+j.cut,0)],
+    ['PH Priority Jobs', allDayJobs.filter(j=>j.status==='PH').length],
+    ['Same-Dim Savings (10 min each)', startJobs.filter(j=>j.mr===MR_SAME).length],
+  ];
+  let ws2=XLSX.utils.aoa_to_sheet(sumRows);
+  ws2['!cols']=[{wch:30},{wch:28}];
+  XLSX.utils.book_append_sheet(wb, ws2, 'Summary');
+
+  // ── Sheet 3: B1 Schedule ──
+  if(b1j.length){
+    let ws3=XLSX.utils.aoa_to_sheet([HDR,...b1j.map(j=>[j.sr,j.jcno,j.cust,j.name,j.qty,j.cut,j.dim,j.cls,j.punch,j.status,j.commit,j.mach,j.mrLabel,j.mrTime,j.mrDate,j.mrShift,j.psTime,j.psDate,j.psShift,j.eTime,j.eDate,j.eShift,b1j.includes(j)&&j.sKey!==key?`🔄 In Progress — Completes ${j.eDate}`:j.sKey===j.eKey?'✅ Completes Today':`⏳ Continues till ${j.eDate}`])]);
+    ws3['!cols']=ws['!cols'];
+    XLSX.utils.book_append_sheet(wb, ws3, 'Machine B1');
+  }
+
+  // ── Sheet 4: B2 Schedule ──
+  if(b2j.length){
+    let ws4=XLSX.utils.aoa_to_sheet([HDR,...b2j.map(j=>[j.sr,j.jcno,j.cust,j.name,j.qty,j.cut,j.dim,j.cls,j.punch,j.status,j.commit,j.mach,j.mrLabel,j.mrTime,j.mrDate,j.mrShift,j.psTime,j.psDate,j.psShift,j.eTime,j.eDate,j.eShift,b2j.includes(j)&&j.sKey!==key?`🔄 In Progress — Completes ${j.eDate}`:j.sKey===j.eKey?'✅ Completes Today':`⏳ Continues till ${j.eDate}`])]);
+    ws4['!cols']=ws['!cols'];
+    XLSX.utils.book_append_sheet(wb, ws4, 'Machine B2');
+  }
+
+  XLSX.writeFile(wb, `AIA_Punching_${key.replace(/-/g,'')}.xlsx`);
+  toast(`⬇️ ${dayDate} ka Excel ready! (${startJobs.length} new + ${inProgressJobs.length} in-progress)`);
+}
+
+function dlAllDays(){
+  if(!sched.length){toast('⚠️ Schedule nahi hai!');return;}
+  // Collect all unique calendar days across all jobs (start date to end date)
+  let daySet = new Set();
+  sched.forEach(j=>{
+    let d = new Date(j.mrKey+'T00:00:00');
+    let end = new Date(j.eKey+'T00:00:00');
+    while(d <= end){
+      if(d.getDay()!==0) daySet.add(d.toISOString().slice(0,10));
+      d.setDate(d.getDate()+1);
+    }
+  });
+  let days=[...daySet].sort();
+  days.forEach((k,i)=>setTimeout(()=>dlDay(k),i*500));
+  toast(`⬇️ ${days.length} din ke Excel files download ho rahe hain...`);
+}
+
+function dlClean(){
+  if(!clean.length)return;
+  // User friendly CSV with proper headers
+  let h=['Sr No','JCNO','Document Date','Customer Name','Job Name','Job Qty',
+    'PO Number','Total Cut Sheet','Carton Dimension','Item Class','Punch Detail','Job Status','Commit Date'];
+  let rows=clean.map(r=>[r.sr,r.jcno,r.docDate,r.cust,r.name,r.qty,
+    r.po,r.cut,r.dim,r.cls,r.punch,r.status,r.commit]);
+  let csv=[h,...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  let a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));
+  a.download='AIA_Clean_Punching_Data.csv'; a.click();
+  toast('⬇️ Clean CSV downloaded!');
+}
+
+// ════════════════════════════════════
+// URGENT JOB
+// ════════════════════════════════════
+function openModal(){document.getElementById('modal').classList.add('show');}
+function closeModal(){document.getElementById('modal').classList.remove('show');}
+function addUrgent(){
+  let name=document.getElementById('u_name').value.trim();
+  let qty=parseFloat(document.getElementById('u_qty').value)||0;
+  if(!name||!qty){toast('⚠️ Name aur Qty required!');return;}
+  let job={
+    sr:0,jcno:document.getElementById('u_jcno').value.trim()||'URG',
+    cust:document.getElementById('u_cust').value.trim(),name,qty,
+    dim:document.getElementById('u_dim').value.trim()||'Unknown',
+    punch:document.getElementById('u_punch').value.trim()||'Punching',
+    status:'URGENT',cls:'',commit:'',po:'',cut:0,
+    docDate:new Date().toLocaleDateString('en-IN'),urgent:true
+  };
+  let pos=document.getElementById('u_pos').value;
+  pos==='top'?clean.unshift(job):clean.splice(1,0,job);
+  closeModal();
+  buildSchedule();
+  toast('⚡ Urgent job schedule mein add!');
+}
+
+// ════════════════════════════════════
+// UI
+// ════════════════════════════════════
+function goPg(n){
+  ['pg1','pg2','pg3'].forEach((id,i)=>document.getElementById(id).classList.toggle('hidden',i+1!==n));
+  ['si1','si2','si3'].forEach((id,i)=>{
+    let el=document.getElementById(id);
+    el.classList.remove('active','done');
+    if(i+1<n)el.classList.add('done'); else if(i+1===n)el.classList.add('active');
+  });
+  document.getElementById('sep1').classList.toggle('done',n>1);
+  document.getElementById('sep2').classList.toggle('done',n>2);
+}
+function setTab(t){
+  document.getElementById('vDay').classList.toggle('hidden',t!=='day');
+  document.getElementById('vTbl').classList.toggle('hidden',t!=='tbl');
+  document.querySelectorAll('.tab-btn').forEach((el,i)=>el.classList.toggle('on',(i===0&&t==='day')||(i===1&&t==='tbl')));
+}
+function pc(s){return{PH:'p-ph',VDP:'p-vdp',LAMINATION:'p-lam',SCREEN:'p-scr',FOIL:'p-foil','2ND PASS':'p-2nd','Job Not Started':'p-jns',URGENT:'p-urg'}[s]||'p-jns';}
+function toast(msg){let t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3000);}
+
+goPg(1);
+</script>
+</body>
+</html>
