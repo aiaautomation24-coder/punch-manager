@@ -1450,38 +1450,42 @@ function dlDay(key){
 async function dlAllDays(){
   if(!sched.length){ toast('⚠️ Schedule nahi hai!'); return; }
 
-  // Collect ALL unique day keys — from sKey AND eKey of every job
+  // Collect ALL unique day keys
   let daySet = new Set();
-  sched.forEach(j=>{
-    if(j.sKey)  daySet.add(j.sKey);
-    if(j.mrKey) daySet.add(j.mrKey);
-    if(j.eKey)  daySet.add(j.eKey);
-    // Also fill in between for multi-day jobs
+  sched.forEach(j => {
+    if(j.sKey) daySet.add(j.sKey);
+    if(j.eKey) daySet.add(j.eKey);
     if(j.sKey && j.eKey && j.sKey !== j.eKey){
       let d = new Date(j.sKey + 'T12:00:00');
       let e = new Date(j.eKey + 'T12:00:00');
-      for(let i=0; i<=30; i++){
-        if(d >= e) break;
-        d.setDate(d.getDate()+1);
-        if(d.getDay()!==0)
+      while(d < e){
+        d.setDate(d.getDate() + 1);
+        if(d.getDay() !== 0)
           daySet.add(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'));
       }
     }
   });
+  // Also check machine end days via wm2info
+  ['B1','B2'].forEach(mach => {
+    let jobs = sched.filter(j=>j.mach===mach);
+    if(!jobs.length) return;
+    let wm = 0; jobs.forEach(j=>{ wm += (j.mr||MR_NEW)+(j.proc||0); });
+    let info = wm2info(wm);
+    if(info.dayKey) daySet.add(info.dayKey);
+  });
 
   let days = [...daySet].sort();
-  console.log('dlAllDays — days found:', days.length, days);
+  if(!days.length){ toast('⚠️ Koi din nahi mila!'); return; }
 
-  let sheets = days.map(key=>{
-    let dateLabel = new Date(key+'T12:00:00').toLocaleDateString('en-IN',
-      {weekday:'long',day:'2-digit',month:'short',year:'numeric'});
-    let startJobs = sched.filter(j=>(j.sKey||j.mrKey)===key);
-    let ipJobs    = sched.filter(j=>(j.sKey||j.mrKey)<key && (j.eKey||j.sKey)>=key);
+  // Build day-wise data
+  let daySheets = days.map(key => {
+    let startJobs = sched.filter(j => j.sKey === key);
+    let ipJobs    = sched.filter(j => j.sKey < key && j.eKey >= key);
     if(!startJobs.length && !ipJobs.length) return null;
-    let sn = new Date(key+'T12:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short'}).replace(' ','-');
     return {
-      sheetName: sn,
-      dateLabel,
+      key,
+      dateLabel: new Date(key+'T12:00:00').toLocaleDateString('en-IN',
+        {weekday:'long',day:'2-digit',month:'short',year:'numeric'}),
       b1Start: startJobs.filter(j=>j.mach==='B1'),
       b2Start: startJobs.filter(j=>j.mach==='B2'),
       b1IP:    ipJobs.filter(j=>j.mach==='B1'),
@@ -1489,13 +1493,48 @@ async function dlAllDays(){
     };
   }).filter(Boolean);
 
-  console.log('sheets to build:', sheets.length, sheets.map(s=>s.sheetName));
-  if(!sheets.length){ toast('⚠️ Koi sheet nahi bani!'); return; }
-  toast(`⏳ ${sheets.length} din ka Excel ban raha hai...`);
+  console.log('dlAllDays — days:', daySheets.length, daySheets.map(d=>d.key));
+  if(!daySheets.length){ toast('⚠️ Koi data nahi!'); return; }
+  toast(`⏳ ${daySheets.length} din ka single Excel ban raha hai...`);
 
   try {
-    await buildAndSaveXL(sheets, `AIA_Punching_ALL_DAYS_${new Date().toLocaleDateString('en-IN').replace(/\//g,'_')}.xlsx`);
-    toast(`⬇️ ${sheets.length} din ka combined Excel ready!`);
+    // ── Build ONE combined sheet ──
+    const NCols = 23;
+    const CW    = [5,14,22,34,9,11,20,12,16,10,10,9,14,10,12,9,10,12,9,10,12,9,28];
+    let allRows = [];
+    let merges  = [];
+
+    daySheets.forEach((ds, di) => {
+      // separator gap between days (skip for first)
+      if(di > 0){
+        allRows.push(emptyRow(NCols));
+        allRows.push(emptyRow(NCols));
+        allRows.push(emptyRow(NCols));
+      }
+
+      // Get rows for this day from buildPunchSheetRows
+      const {rows: dayRows} = buildPunchSheetRows(ds);
+
+      // Record merge offsets for title (row 0) and date (row 1) of this day
+      const baseR = allRows.length;
+      merges.push({s:{r:baseR,   c:0}, e:{r:baseR,   c:NCols-1}}); // title
+      merges.push({s:{r:baseR+1, c:0}, e:{r:baseR+1, c:NCols-1}}); // date
+
+      dayRows.forEach(r => allRows.push(r));
+    });
+
+    // Build worksheet
+    const aoa = allRows.map(r => r ? r.cells.map(c => c.v===''||c.v==null ? '' : c.v) : []);
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols']   = CW.map(w=>({wch:w}));
+    ws['!rows']   = allRows.map(r => r ? {hpt: r.ht||15} : {hpt:6});
+    ws['!merges'] = merges;
+    try { applyXlStyles(ws, allRows); } catch(se){ console.warn('Style err:', se.message); }
+
+    const wbXL = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wbXL, ws, 'All Days');
+    XLSX.writeFile(wbXL, `AIA_Punching_ALL_DAYS_${new Date().toLocaleDateString('en-IN').replace(/\//g,'_')}.xlsx`);
+    toast(`✅ ${daySheets.length} din ka combined Excel ready!`);
   } catch(e){
     toast('❌ Error: ' + e.message);
     console.error(e);
@@ -1944,20 +1983,20 @@ function buildPunchSheetRows(sheetInfo){
     'Complete','End Date','End Shift','Remarks'];
 
   let rows = [];
-  // Row 1: Company title
+  // Title
   let tCells = Array(NCols).fill(0).map((_,i)=>pCell(i===0?'AIA INDUSTRIES — PUNCHING SCHEDULE':'', 1));
   rows.push(pRow(tCells, 28));
-  // Row 2: Date & Day — large, center, merged
+  // Date & Day — large, center, merged
   let dateCells = Array(NCols).fill(0).map((_,i)=>pCell(i===0?dateLabel.toUpperCase():'', 30));
   rows.push(pRow(dateCells, 32));
-  // Row 3: Shift info
+  // Date info row
   const allMRDates = [...b1Start,...b2Start,...b1IP,...b2IP].map(j=>j.mrDate).filter(Boolean);
   const allEndDates = [...b1Start,...b2Start,...b1IP,...b2IP].map(j=>j.eDate).filter(Boolean);
   const mrDateStr  = allMRDates.length  ? [...new Set(allMRDates)].join(', ')  : dateLabel;
   const endDateStr = allEndDates.length ? [...new Set(allEndDates)].join(', ') : '—';
   let dCells = Array(NCols).fill(0).map((_,i)=>pCell(i===0?`Shift 1: 07:00–19:00  |  Shift 2: 19:30–07:00  |  MR Date: ${mrDateStr}  |  Expected Completion: ${endDateStr}`:'', 2));
   rows.push(pRow(dCells, 14));
-  // Row 4: Summary
+  // Subtitle
   let sCells = Array(NCols).fill(0).map((_,i)=>pCell(i===0?`B1: ${b1Start.length+b1IP.length} jobs  |  B2: ${b2Start.length+b2IP.length} jobs  |  Total Qty: ${allDay.reduce((a,j)=>a+j.qty,0).toLocaleString()}  |  Total Cut: ${allDay.reduce((a,j)=>a+j.cut,0).toLocaleString()}`:'', 2));
   rows.push(pRow(sCells, 14));
   rows.push(emptyRow(NCols));
@@ -2091,13 +2130,13 @@ const _SM = {
   21: {bg:'1A0050', fc:'FFFFFF', bold:true,  sz:13},
   22: {bg:'1E3A8A', fc:'FFFFFF', bold:true,  sz:9},
   23: {bg:'7E22CE', fc:'FFFFFF', bold:true,  sz:9},
-  30: {bg:'0F2744', fc:'F97316', bold:true,  sz:18},
   24: {bg:'1E3A8A', fc:'FFFFFF', bold:true,  sz:10},
   25: {bg:'7E22CE', fc:'FFFFFF', bold:true,  sz:10},
   26: {bg:'EFF6FF', fc:'1E293B', bold:false, sz:9},
   27: {bg:'F5F3FF', fc:'1E293B', bold:false, sz:9},
   28: {bg:'FFF7ED', fc:'92400E', bold:false, sz:9},
   29: {bg:'FDF4FF', fc:'1E293B', bold:false, sz:9},
+  30: {bg:'0F2744', fc:'F97316', bold:true,  sz:18},
 };
 function applyXlStyles(ws, rows){
   rows.forEach((row, ri) => {
@@ -2130,11 +2169,9 @@ async function buildAndSaveXL(sheetsInfo, filename){
       const ws = XLSX.utils.aoa_to_sheet(aoa);
       ws['!cols'] = colWidths.map(w=>({wch:w}));
       ws['!rows'] = rows.map(r => r ? {hpt: r.ht||15} : {hpt:6});
-      // Merge title row (row 0) and date row (row 1) across all columns
-      const lastCol = colWidths.length - 1;
       ws['!merges'] = [
-        {s:{r:0,c:0}, e:{r:0,c:lastCol}},
-        {s:{r:1,c:0}, e:{r:1,c:lastCol}},
+        {s:{r:0,c:0}, e:{r:0,c:colWidths.length-1}},
+        {s:{r:1,c:0}, e:{r:1,c:colWidths.length-1}},
       ];
       try { applyXlStyles(ws, rows); } catch(se){ console.warn('Style err sheet'+idx, se.message); }
       let sname = s.sheetName||('S'+(idx+1));
