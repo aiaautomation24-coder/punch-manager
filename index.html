@@ -5,7 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AIA Punching Schedule</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+<script>
+// xlsx-js-style exposes 'XLSXStyle' — alias it to XLSX so rest of code works unchanged
+if(typeof XLSXStyle !== 'undefined' && typeof XLSX === 'undefined') window.XLSX = XLSXStyle;
+if(typeof XLSXStyle !== 'undefined') window.XLSX = XLSXStyle; // always prefer style-enabled version
+</script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap');
 
@@ -63,6 +68,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .drop h3{font-family:'Syne',sans-serif;font-size:15px;font-weight:700;color:var(--navy);}
 .drop p{font-size:11px;color:var(--muted);margin-top:4px;}
 .drop-fname{margin-top:10px;font-family:'DM Mono',monospace;font-size:12px;font-weight:500;color:var(--blue);}
+.soon-card{background:#1a2736;border:1px solid #2a3f55;border-radius:12px;padding:12px 14px;cursor:grab;transition:background 0.15s;}
+.soon-card:hover{background:#1e3a5f;}
+.soon-drag{font-size:18px;color:#64748b;cursor:grab;flex-shrink:0;}
+.soon-num{width:26px;height:26px;background:#f97316;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#fff;flex-shrink:0;}
+.is-cs{border-left:3px solid #f97316!important;background:rgba(249,115,22,0.06)!important;opacity:0.85;}
 
 /* FILTER TAGS */
 .filter-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;}
@@ -192,6 +202,19 @@ tr.ip-row{background:#FFF7ED;}
 .info{background:#EEF5FF;border:1px solid #BFDBFE;border-radius:7px;padding:10px 14px;font-size:11px;color:#1E40AF;margin-bottom:14px;}
 .sec-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:8px;display:flex;align-items:center;gap:8px;}
 .sec-lbl::after{content:'';flex:1;height:1px;background:var(--border);}
+
+/* PRINTING MACHINE COLS */
+.pmach-lbl-4c{background:#DBEAFE;color:#1E40AF;}
+.pmach-lbl-6c{background:#F3E8FF;color:#6B21A8;}
+.pcard{background:#F8FAFC;border:1px solid var(--border);border-radius:7px;padding:9px 12px;margin-bottom:7px;border-left:4px solid #8b5cf6;}
+.pcard.pc-4c{border-left-color:#3B82F6;background:#EFF6FF;}
+.pcard.pc-6c{border-left-color:#8b5cf6;background:#FAF5FF;}
+.pcard.pc-ip{border-left-color:var(--accent);background:#FFF7ED;}
+.p-4c{background:#DBEAFE;color:#1E40AF;}
+.p-6c{background:#F3E8FF;color:#6B21A8;}
+.print-mach-row{display:grid;grid-template-columns:1fr 1fr;}
+.print-mach-col{padding:12px 16px;border-right:1px solid var(--border);}
+.print-mach-col:last-child{border-right:none;}
 </style>
 </head>
 <body>
@@ -218,13 +241,44 @@ tr.ip-row{background:#FFF7ED;}
   <div class="card">
     <div class="card-hd"><h2>📂 STEP 1 — Upload Raw Data</h2><span class="chip">CSV / XLSX / XLSM</span></div>
     <div class="card-bd">
-      <div class="info">ℹ️ AIA Track Record file upload karo (CSV, .xlsx, .xls, .xlsm) — system auto filter karega aur punching pending jobs nikalega.</div>
-      <div class="drop" id="dropZone">
-        <input type="file" id="fileIn" accept=".csv,.xlsx,.xls,.xlsm" onchange="onFile(this)">
-        <div class="drop-ico">📂</div>
-        <h3>File Drop Karo Ya Click Karo</h3>
-        <p>CSV, .xlsx, .xls, .xlsm — sab supported</p>
-        <div class="drop-fname" id="dropFname"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+        <!-- Track Record -->
+        <div>
+          <div class="sec-lbl" style="margin-bottom:6px;">📋 AIA Track Record <span style="color:#ef4444">*</span></div>
+          <div class="drop" id="dropZone" style="padding:18px 12px;">
+            <input type="file" id="fileIn" accept=".csv,.xlsx,.xls,.xlsm" onchange="onFile(this)">
+            <div class="drop-ico" style="font-size:28px;">📂</div>
+            <h3 style="font-size:13px;">Track Record File</h3>
+            <p style="font-size:11px;">CSV / XLSX / XLSM</p>
+            <div class="drop-fname" id="dropFname"></div>
+          </div>
+        </div>
+        <!-- Printing Schedule -->
+        <div>
+          <div class="sec-lbl" style="margin-bottom:6px;">🖨️ Printing Schedule <span style="color:#94a3b8;font-size:10px;">(optional)</span></div>
+          <div class="drop" id="dropZone2" style="padding:18px 12px;border-color:#1e3a5f;" onclick="document.getElementById('fileIn2').click()">
+            <input type="file" id="fileIn2" accept=".xlsx,.xls,.xlsm" onchange="onFile2(this)" style="display:none">
+            <div class="drop-ico" style="font-size:28px;">🖨️</div>
+            <h3 style="font-size:13px;">Printing Pipeline File</h3>
+            <p style="font-size:11px;">4 col + 6 col sheets</p>
+            <div class="drop-fname" id="dropFname2">Not loaded</div>
+          </div>
+        </div>
+      </div>
+      <!-- Die No. File -->
+      <div style="margin-top:10px;">
+        <div class="sec-lbl" style="margin-bottom:6px;">🔢 Die No. File <span style="color:#94a3b8;font-size:10px;">(optional — JCNO + Die No.)</span></div>
+        <div class="drop" id="dropZone3" style="padding:14px 12px;border-color:#1e3a5f;" onclick="document.getElementById('fileIn3').click()">
+          <input type="file" id="fileIn3" accept=".xlsx,.xls,.xlsm,.csv" onchange="onFile3(this)" style="display:none">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="font-size:22px;">🔢</span>
+            <div>
+              <div style="font-size:12px;font-weight:700;color:#fff;">Die No. File</div>
+              <div style="font-size:10px;color:#64748b;">JCNO + Die No. columns</div>
+            </div>
+            <div class="drop-fname" id="dropFname3" style="margin-left:auto;margin-top:0;">Not loaded</div>
+          </div>
+        </div>
       </div>
 
       <div id="filterPanel" class="hidden mt12">
@@ -257,7 +311,7 @@ tr.ip-row{background:#FFF7ED;}
         <table>
           <thead><tr>
             <th>#</th><th>JCNO</th><th>Doc Date</th><th>Customer</th>
-            <th>Job Name</th><th>Qty</th><th>Cut Sheet</th><th>Carton Dim</th>
+            <th>Job Name</th><th>Qty</th><th>Cut Sheet</th><th>Carton Dim</th><th>Die No.</th>
             <th>Item Type</th><th>Item Class</th><th>Status</th><th>Commit Date</th>
           </tr></thead>
           <tbody id="tb2"></tbody>
@@ -274,10 +328,13 @@ tr.ip-row{background:#FFF7ED;}
     <div class="tabs">
       <div class="tab on" onclick="switchTab('day')">📅 Day-wise</div>
       <div class="tab" onclick="switchTab('tbl')">📋 Table</div>
+      <div class="tab" onclick="switchTab('soon')" id="soonTab">🔜 Coming Soon <span id="soonBadge" style="background:#f97316;color:#fff;border-radius:10px;padding:1px 7px;font-size:10px;margin-left:4px;">0</span></div>
+      <div class="tab" onclick="switchTab('print')" id="printTab">🖨️ Printing Schedule <span id="printBadge" style="background:#8b5cf6;color:#fff;border-radius:10px;padding:1px 7px;font-size:10px;margin-left:4px;">0</span></div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
       <button class="btn btn-orange btn-sm" onclick="openModal()">⚡ Add Urgent Job</button>
-      <button class="btn btn-green btn-sm" onclick="dlAllDays()">⬇️ Download All Days Excel</button>
+      <button class="btn btn-green btn-sm" onclick="dlAllDays()">⬇️ All Days Excel (1 File)</button>
+      <button class="btn btn-ghost btn-sm" id="printDlBtn" style="display:none;" onclick="dlPrintingExcel()">🖨️ Download Printing Excel</button>
       <button class="btn btn-ghost btn-sm" onclick="goPg(2)">← Back</button>
     </div>
   </div>
@@ -291,7 +348,7 @@ tr.ip-row{background:#FFF7ED;}
           <table>
             <thead><tr>
               <th>#</th><th>JCNO</th><th>Customer</th><th>Job Name</th>
-              <th>Qty</th><th>Cut Sheet</th><th>Dim</th><th>Item Type</th><th>Status</th>
+              <th>Qty</th><th>Cut Sheet</th><th>Dim</th><th>Die No.</th><th>Item Type</th><th>Status</th>
               <th>Machine</th><th>MR Type</th>
               <th>MR Start</th><th>MR Date</th>
               <th>Prod Start</th><th>Prod Date</th>
@@ -299,6 +356,68 @@ tr.ip-row{background:#FFF7ED;}
             </tr></thead>
             <tbody id="tb3"></tbody>
           </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- COMING SOON VIEW -->
+  <div id="soonView" class="hidden">
+    <div class="card">
+      <div class="card-hd">
+        <h2>🔜 Coming Soon — Printing Pipeline</h2>
+        <span class="chip">Drag to reorder priority</span>
+      </div>
+      <div class="card-bd">
+        <div class="info">ℹ️ Ye jobs abhi printing/processing mein hain. Expected punching date ke hisaab se sort hain. Drag & drop se priority set karo.</div>
+        <div id="soonList" style="display:flex;flex-direction:column;gap:8px;margin-top:12px;"></div>
+        <div id="soonEmpty" class="hidden" style="text-align:center;padding:32px;color:#64748b;">
+          <div style="font-size:32px;margin-bottom:8px;">🖨️</div>
+          <div>Printing schedule file upload nahi hui ya koi job pending nahi hai.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PRINTING SCHEDULE VIEW -->
+  <div id="printView" class="hidden">
+    <div class="kpi-grid" id="kpiPrint" style="grid-template-columns:repeat(6,1fr);"></div>
+
+    <!-- Sub-tabs for printing -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
+      <div class="tabs" id="printSubTabs">
+        <div class="tab on" onclick="switchPrintTab('all')">📅 All Days</div>
+        <div class="tab" onclick="switchPrintTab('4col')">🔵 4 Col</div>
+        <div class="tab" onclick="switchPrintTab('6col')">🟢 6 Col</div>
+        <div class="tab" onclick="switchPrintTab('ptbl')">📋 Table</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <div style="background:#1A2B40;border-radius:7px;padding:6px 12px;font-size:11px;color:#94a3b8;">
+          🖨️ Speed: <b style="color:#fff;">5,000 sh/hr</b> &nbsp;|&nbsp; ⏱️ MR New: <b style="color:#f97316;">60 min</b> &nbsp;|&nbsp; Same: <b style="color:#22c55e;">10 min</b>
+        </div>
+      </div>
+    </div>
+
+    <div id="printAllView"><div id="printDayCards"></div></div>
+    <div id="print4colView" class="hidden"><div id="print4cards"></div></div>
+    <div id="print6colView" class="hidden"><div id="print6cards"></div></div>
+    <div id="printTblView" class="hidden">
+      <div class="card">
+        <div class="card-hd"><h2>📋 Printing Schedule — Full Table</h2><span class="chip" id="printTblCount">0 JOBS</span></div>
+        <div class="card-bd" style="padding:0;">
+          <div class="tbl-wrap">
+            <table>
+              <thead><tr>
+                <th>#</th><th>JCNO</th><th>Customer</th><th>Job Name</th>
+                <th>Qty</th><th>Cut Sheet</th><th>Dim</th><th>Item Type</th>
+                <th>Machine</th><th>Current Status</th><th>MR Type</th>
+                <th>MR Start</th><th>MR Date</th>
+                <th>Print Start</th><th>Print Date</th>
+                <th>Complete</th><th>End Date</th><th>Commit</th>
+              </tr></thead>
+              <tbody id="tbPrint"></tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -334,7 +453,7 @@ tr.ip-row{background:#FFF7ED;}
 <div class="toast" id="toast"></div>
 
 <script>
-'use strict';
+
 // ══════════════════════════════════════════════════════
 // CONFIG
 // ══════════════════════════════════════════════════════
@@ -408,27 +527,34 @@ const MR_NEW  = 60;
 const MR_SAME = 10;
 let BASE = new Date(); BASE.setHours(0,0,0,0);
 
-let clean = [], sched = [];
+let clean = [], sched = [], comingSoon = [], dragSrc = null;
+let dieMap = {}; // normalized_dim -> Die No. string
+function getDie(dim){
+  if(!dim) return '—';
+  const norm = String(dim).replace(/\s+/g,'').toLowerCase();
+  return dieMap[norm] || '—';
+}
 
 // ══════════════════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════════════════
-document.getElementById('topDate').textContent =
-  new Date().toLocaleDateString('en-IN',{weekday:'short',day:'2-digit',month:'short',year:'numeric'});
+document.addEventListener('DOMContentLoaded', function(){
+  document.getElementById('topDate').textContent =
+    new Date().toLocaleDateString('en-IN',{weekday:'short',day:'2-digit',month:'short',year:'numeric'});
 
-document.getElementById('xTags').innerHTML = EXCL.map(s=>`<span class="tag tag-x">${s}</span>`).join('');
-document.getElementById('vTags').innerHTML = INCL.map(s=>`<span class="tag tag-v">${s}</span>`).join('');
+  document.getElementById('xTags').innerHTML = EXCL.map(s=>`<span class="tag tag-x">${s}</span>`).join('');
+  document.getElementById('vTags').innerHTML = INCL.map(s=>`<span class="tag tag-v">${s}</span>`).join('');
 
-// today as default
-// schedule start = today (set on file upload)
+  // drag drop
+  const dz = document.getElementById('dropZone');
+  dz.addEventListener('dragover', e=>{e.preventDefault();dz.classList.add('over');});
+  dz.addEventListener('dragleave', ()=>dz.classList.remove('over'));
+  dz.addEventListener('drop', e=>{
+    e.preventDefault(); dz.classList.remove('over');
+    if(e.dataTransfer.files[0]) handleFileObj(e.dataTransfer.files[0]);
+  });
 
-// drag drop
-const dz = document.getElementById('dropZone');
-dz.addEventListener('dragover', e=>{e.preventDefault();dz.classList.add('over');});
-dz.addEventListener('dragleave', ()=>dz.classList.remove('over'));
-dz.addEventListener('drop', e=>{
-  e.preventDefault(); dz.classList.remove('over');
-  if(e.dataTransfer.files[0]) handleFileObj(e.dataTransfer.files[0]);
+  goPg(1);
 });
 
 // ══════════════════════════════════════════════════════
@@ -442,6 +568,362 @@ function handleFileObj(f){
   document.getElementById('dropFname').textContent = '📄 ' + f.name;
   document.getElementById('filterPanel').classList.remove('hidden');
   toast('✅ File loaded: ' + f.name);
+}
+
+// ══════════════════════════════════════════════════════
+// DIE NO. FILE
+// ══════════════════════════════════════════════════════
+function onFile3(inp){
+  if(!inp.files[0]) return;
+  const f = inp.files[0];
+  document.getElementById('dropFname3').textContent = '📄 ' + f.name;
+  document.getElementById('dropZone3').style.borderColor = '#22c55e';
+  const isCSV = /\.csv$/i.test(f.name);
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      dieMap = {};
+      let rows = [];
+      if(isCSV){
+        const parsed = Papa.parse(e.target.result, {header:true, skipEmptyLines:true});
+        rows = parsed.data;
+      } else {
+        const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array'});
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        rows = XLSX.utils.sheet_to_json(ws, {defval:''});
+      }
+      rows.forEach(r => {
+        const keys = Object.keys(r);
+        // Die Number — first col or col with 'die'+'num/no'
+        const dieKey = keys.find(k => /die/i.test(k) && /num|no/i.test(k))
+                    || keys.find(k => /die/i.test(k))
+                    || keys[0];
+        // Size/Dimension — col with 'size' or 'lxbxh' or 'dim'
+        const sizeKey = keys.find(k => /size|lxbxh|dim/i.test(k.replace(/\s/g,'')))
+                     || keys[2];
+        const rawSize = String(r[sizeKey]||'').trim();
+        const die = String(r[dieKey]||'').trim();
+        if(!rawSize || !die || die==='0') return;
+        // Normalize: remove all spaces → "84 x 85 x 112" → "84x85x112"
+        const normSize = rawSize.replace(/\s+/g,'').toLowerCase();
+        if(!dieMap[normSize]) dieMap[normSize] = new Set();
+        dieMap[normSize].add(die);
+      });
+      // Convert Sets to comma-separated strings
+      Object.keys(dieMap).forEach(k => { dieMap[k] = [...dieMap[k]].join(', '); });
+      const n = Object.keys(dieMap).length;
+      toast('✅ Die No. file loaded — ' + n + ' entries!');
+      // Re-render if already on page 2 or 3
+      if(!document.getElementById('pg2').classList.contains('hidden')) renderPg2();
+      if(!document.getElementById('pg3').classList.contains('hidden')){ renderDayCards(); renderTable3(); }
+    } catch(err) {
+      toast('❌ Die file error: ' + err.message);
+    }
+  };
+  if(isCSV) reader.readAsText(f);
+  else reader.readAsArrayBuffer(f);
+}
+
+// ══════════════════════════════════════════════════════
+// PRINTING SCHEDULE FILE
+// ══════════════════════════════════════════════════════
+let printJobsRaw = [];
+
+function onFile2(inp){
+  if(!inp.files[0]) return;
+  const f = inp.files[0];
+  document.getElementById('dropFname2').textContent = '📄 ' + f.name;
+  document.getElementById('dropZone2').style.borderColor = '#22c55e';
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array', cellDates:true});
+      comingSoon = [];
+      printJobsRaw = [];
+
+      ['4 col','6 col'].forEach(sn => {
+        const ws = wb.Sheets[sn];
+        if(!ws) return;
+        const rows = XLSX.utils.sheet_to_json(ws, {defval:'', header:1, range:1});
+        if(!rows.length) return;
+        const hdr = rows[0];
+        const dataRows = rows.slice(2);
+        const cleaned = dataRows.map(r => {
+          const obj = {};
+          hdr.forEach((h,i) => {
+            const key = String(h||'').replace(/[\r\n\t]+/g,' ').trim();
+            if(key) obj[key] = r[i];
+          });
+          return obj;
+        });
+        parsePrintingJobsFull(cleaned, sn);
+      });
+
+      comingSoon.sort((a,b) => (a.printDateKey||'').localeCompare(b.printDateKey||'') || (a.commit||'').localeCompare(b.commit||''));
+      comingSoon.forEach((j,i) => { j.priority = i+1; j.sr = i+1; });
+
+      const n = comingSoon.length;
+      toast('✅ Printing schedule loaded — ' + n + ' jobs!');
+      document.getElementById('soonBadge').textContent = n;
+      document.getElementById('printBadge').textContent = n;
+    } catch(err) {
+      toast('❌ Printing file error: ' + err.message);
+      console.error(err);
+    }
+  };
+  reader.readAsArrayBuffer(f);
+}
+function isDummyDate(v){
+  if(!v||v===''||v==='—') return true;
+  const s = String(v);
+  return s.startsWith('=') || s.includes('1900') || s.toLowerCase()==='nan';
+}
+
+function parsePrintingJobsFull(rows, machine){
+  const EXCL_S = ['CANCELLED','SHORT CLOSE','REJECTED','RD','DISPATCHED'];
+  const machLabel = machine === '4 col' ? '4 Col' : '6 Col';
+
+  // Helper: get value by fuzzy key match (handles \n spaces in headers)
+  function fget(r, ...keys){
+    for(let k of keys){
+      // exact match
+      if(r[k] !== undefined && r[k] !== '') return r[k];
+      // normalize both sides: remove \n \r spaces → compare
+      const kn = k.replace(/[\s\r\n]+/g,'').toLowerCase();
+      const found = Object.keys(r).find(rk => rk.replace(/[\s\r\n]+/g,'').toLowerCase() === kn);
+      if(found && r[found] !== undefined && r[found] !== '') return r[found];
+    }
+    return '';
+  }
+
+  rows.forEach(r => {
+    const jcno = String(fget(r,'JC NO','JCNO')||'').trim();
+    if(!jcno || jcno.length < 3) return;
+
+    const status = String(fget(r,'Job_Status','Job Status')||'').trim();
+    if(EXCL_S.some(e => status.toUpperCase().includes(e))) return;
+
+    // Skip if punching already done
+    const punchVal = fget(r,'punching');
+    if(punchVal && String(punchVal).trim() !== '' && !isDummyDate(punchVal)) return;
+
+    // Skip HOLD / SHADE CARD
+    if(status.toUpperCase().includes('HOLD') || status.toUpperCase().includes('SHADE')) return;
+
+    const cutRaw = fget(r,'Tot. Cut    SH','Tot. Cut SH','Tot. Cut\n   SH','TotCutSH','sheet');
+    const qtyRaw = fget(r,'Job Qty','Job\nQty','JobQty','qty');
+    const cut = parseFloat(cutRaw)||0;
+    const qty = parseFloat(qtyRaw)||0;
+    if(!cut && !qty) return;
+
+    const name     = String(fget(r,'JobName','Job Name')||'').trim();
+    const cust     = String(fget(r,'Client Name','CUSTOMER NAME')||'').trim();
+    const rawDim   = String(fget(r,'CartonDim.','CartonDim','Carton Dimension')||'Unknown').trim();
+    const dim      = rawDim.replace(/\s+/g,'');
+    const itemType = String(fget(r,'Item Type','Item Type ')||'').trim();
+    const next     = String(fget(r,'NextProcess')||'').trim();
+    const planMach = String(fget(r,'Plan Machine','PlanMachine')||'').trim();
+
+    const commitRaw = fget(r,'Commit Date','CommitDate');
+    let commit = '';
+    if(commitRaw){
+      if(commitRaw instanceof Date) commit = commitRaw.toISOString().slice(0,10);
+      else commit = String(commitRaw).slice(0,10);
+    }
+
+    // Coating/Lam/Foil details
+    const coatDetail = String(fget(r,'CoatDetail')||'').replace(/[\r\n]+/g,' ').trim();
+    const lamDetail  = String(fget(r,'LamDetail')||'').replace(/[\r\n]+/g,' ').trim();
+    const foilDetail = String(fget(r,'FoilingDetail')||'').replace(/[\r\n]+/g,' ').trim();
+    const coatMach   = String(fget(r,'CoatMachine')||'').trim();
+    const coatUV     = String(fget(r,'uv/screen')||'').trim();
+    const lamDone    = String(fget(r,'lamination')||'').trim();
+    const foilDone   = String(fget(r,'foil  stamping')||'').trim();
+
+    // Coating type label
+    let coatType = '';
+    if(coatDetail && coatDetail !== '--' && coatDetail !== '') {
+      const cd = coatDetail.toUpperCase();
+      if(cd.includes('SPOT UV'))                       coatType = 'SPOT UV';
+      else if(cd.includes('MATT UV')||cd.includes('MAT UV')) coatType = 'MATT UV';
+      else if(cd.includes('GLOSS UV'))                 coatType = 'GLOSS UV';
+      else if(cd.includes('DRIP'))                     coatType = 'DRIP OFF';
+      else if(cd.includes('AQUA')||cd.includes('AQUOUS')) coatType = 'AQUA';
+      else if(cd.includes('UV'))                       coatType = 'UV';
+      else                                             coatType = 'COAT';
+    }
+    if(lamDetail && lamDetail !== '--' && lamDetail !== '') coatType = coatType ? coatType+'+LAM' : 'LAM';
+    if(foilDetail && foilDetail !== '')                    coatType = coatType ? coatType+'+FOIL' : 'FOIL';
+
+    // Expected punch date — printing speed: 5000 cut sh/hr, MR: 90 min
+    const SPEED = 5000, MR_MIN = 90, DAY_MIN = 690;
+    const today = new Date(); today.setHours(7,0,0,0); // shift starts 7am
+    let minLeft = DAY_MIN;
+    let expDate = new Date(today);
+
+    const mrMin  = MR_MIN;
+    const prodMin = cut > 0 ? (cut/SPEED)*60 : 120;
+    let totalMin = mrMin + prodMin;
+
+    // Roll over days
+    while(totalMin > 0){
+      if(expDate.getDay() === 0){ expDate.setDate(expDate.getDate()+1); continue; }
+      if(totalMin <= DAY_MIN){ break; }
+      totalMin -= DAY_MIN;
+      expDate.setDate(expDate.getDate()+1);
+    }
+    // Add 1 day per pending post-print process
+    if(coatDetail && coatDetail !== '--' && coatDetail !== '' && isDummyDate(coatUV))
+      expDate.setDate(expDate.getDate()+1);
+    if(lamDetail && lamDetail !== '--' && lamDetail !== '' && isDummyDate(lamDone))
+      expDate.setDate(expDate.getDate()+1);
+    if(foilDetail && foilDetail !== '' && isDummyDate(foilDone))
+      expDate.setDate(expDate.getDate()+1);
+    while(expDate.getDay()===0) expDate.setDate(expDate.getDate()+1);
+
+    const pad = n => String(n).padStart(2,'0');
+    const expKey = `${expDate.getFullYear()}-${pad(expDate.getMonth()+1)}-${pad(expDate.getDate())}`;
+
+    comingSoon.push({
+      jcno, name, cust, cut, qty, dim, itemType,
+      status, next, planMach, commit,
+      coatDetail, lamDetail, foilDetail, coatMach, coatType,
+      machine: machLabel,
+      expPunch: expKey,
+      printDateKey: expKey,
+      priority: 0
+    });
+  });
+}
+
+function parsePrintingJobs(rows, machine){
+  const EXCL_S = ['CANCELLED','SHORT CLOSE','REJECTED','RD','DISPATCHED'];
+  rows.forEach(r => {
+    const jcno   = r['JC NO']||r['JCNO']||'';
+    if(!jcno) return;
+    const status = (r['Job_Status']||'').trim();
+    const next   = (r['NextProcess']||'').trim();
+    if(EXCL_S.includes(status)) return;
+    // Only jobs still in printing pipeline
+    if(!['Printing','Lamination','Coating','UV','uv/screen','Foil','Foiling','SCREEN','2ND PASS','FRONT BAL','Job Not Started','VDP'].includes(next) &&
+       !['Printing','Lamination','SCREEN','UV','FOIL','2ND PASS','FRONT BAL','Job Not Started','VDP','LAMINATION'].includes(status)) return;
+    // Skip if punching already done
+    if(!isDummyDate(r['punching'])) return;
+
+    const cut    = parseFloat(r['Tot. Cut    SH']||r['Tot. Cut SH']||r['sheet']||0)||0;
+    const qty    = parseFloat(r['Job Qty']||r['qty']||0)||0;
+    const commit = r['Commit Date']||'';
+    const name   = r['JobName']||r['Job Name']||'';
+    const cust   = r['Client Name']||r['CUSTOMER NAME']||'';
+    const dim    = r['CartonDim.']||r['CartonDim']||'';
+    const itemType = (r['Item Type ']||r['Item Type']||'').trim();
+
+    // Calculate expected punching date
+    const today = new Date(); today.setHours(0,0,0,0);
+    let expDate = new Date(today);
+
+    // Printing time: cut/5000 hours
+    const printHrs = cut > 0 ? cut/5000 : 2;
+    expDate = new Date(expDate.getTime() + printHrs*3600*1000);
+
+    // +1 day per pending process
+    if(isDummyDate(r['printing date'])) { /* still printing - no extra day */ }
+    if(isDummyDate(r['uv/screen']) && (r['CoatDetail'] && r['CoatDetail']!='')) expDate.setDate(expDate.getDate()+1);
+    if(isDummyDate(r['lamination']) && (r['LamDetail'] && r['LamDetail']!='')) expDate.setDate(expDate.getDate()+1);
+    if(isDummyDate(r['foil  stamping']) && (r['FoilingDetail'] && r['FoilingDetail']!='')) expDate.setDate(expDate.getDate()+1);
+
+    // Skip Sundays
+    while(expDate.getDay()===0) expDate.setDate(expDate.getDate()+1);
+
+    const expKey = `${expDate.getFullYear()}-${String(expDate.getMonth()+1).padStart(2,'0')}-${String(expDate.getDate()).padStart(2,'0')}`;
+
+    comingSoon.push({
+      jcno, name, cust, cut, qty, dim, itemType,
+      status, next, commit: commit.toString().slice(0,10),
+      machine: machine==='4 col'?'4 Col':'6 Col',
+      expPunch: expKey,
+      priority: 0
+    });
+  });
+}
+
+// ══════════════════════════════════════════════════════
+// RENDER COMING SOON
+// ══════════════════════════════════════════════════════
+function renderComingSoon(){
+  const list = document.getElementById('soonList');
+  const empty = document.getElementById('soonEmpty');
+  list.innerHTML = '';
+  if(!comingSoon.length){ empty.classList.remove('hidden'); return; }
+  empty.classList.add('hidden');
+
+  comingSoon.forEach((j,i) => {
+    const card = document.createElement('div');
+    card.className = 'soon-card';
+    card.draggable = true;
+    card.dataset.idx = i;
+    card.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div class="soon-drag">⠿</div>
+        <div class="soon-num">${i+1}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span style="font-weight:800;color:#f97316;font-size:13px;">${j.jcno}</span>
+            <span style="font-size:11px;background:#1e3a5f;color:#60a5fa;padding:2px 7px;border-radius:10px;">${j.machine}</span>
+            <span style="font-size:11px;background:#1a2736;color:#94a3b8;padding:2px 7px;border-radius:10px;">${j.next||j.status}</span>
+            ${j.coatType?`<span style="font-size:11px;background:#2d1b00;color:#fb923c;padding:2px 7px;border-radius:10px;">${j.coatType}</span>`:''}
+          </div>
+          <div style="font-size:12px;color:#cbd5e1;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${j.name}</div>
+          <div style="font-size:11px;color:#64748b;margin-top:2px;">${j.cust}</div>
+          <div style="display:flex;gap:14px;margin-top:5px;">
+            <span style="font-size:11px;color:#94a3b8;">📦 Qty: <b style="color:#e2e8f0;">${j.qty?j.qty.toLocaleString():'—'}</b></span>
+            <span style="font-size:11px;color:#94a3b8;">✂️ Cut Sh: <b style="color:#22c55e;">${j.cut?j.cut.toLocaleString():'—'}</b></span>
+            ${j.dim&&j.dim!=='Unknown'?`<span style="font-size:11px;color:#94a3b8;">📐 <b style="color:#cbd5e1;">${j.dim}</b></span>`:''}
+          </div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;">
+          <div style="font-size:10px;color:#64748b;">Exp. Punch Date</div>
+          <div style="font-size:13px;font-weight:700;color:#22c55e;">${j.expPunch}</div>
+          <div style="font-size:10px;color:#64748b;margin-top:3px;">Commit: ${j.commit||'—'}</div>
+          ${j.planMach?`<div style="font-size:10px;color:#60a5fa;margin-top:2px;">🖨️ ${j.planMach}</div>`:''}
+        </div>
+      </div>`;
+
+    // Drag events
+    card.addEventListener('dragstart', e => { dragSrc = i; card.style.opacity='0.4'; e.dataTransfer.effectAllowed='move'; });
+    card.addEventListener('dragend',   () => { card.style.opacity='1'; });
+    card.addEventListener('dragover',  e => { e.preventDefault(); e.dataTransfer.dropEffect='move'; card.style.background='#1e3a5f'; });
+    card.addEventListener('dragleave', () => { card.style.background=''; });
+    card.addEventListener('drop',      e => {
+      e.preventDefault(); card.style.background='';
+      if(dragSrc===null||dragSrc===i) return;
+      const moved = comingSoon.splice(dragSrc,1)[0];
+      comingSoon.splice(i,0,moved);
+      comingSoon.forEach((x,n)=>x.priority=n+1);
+      renderComingSoon();
+    });
+
+    list.appendChild(card);
+  });
+}
+
+function switchTab(t){
+  ['day','tbl','soon','print'].forEach(x=>{
+    let el = document.getElementById(x+'View');
+    if(el) el.classList.toggle('hidden', x!==t);
+  });
+  // Target only the main tab bar (first .tabs inside pg3 > div)
+  let pg3div = document.querySelector('#pg3 > div:nth-child(2)');
+  if(pg3div){
+    pg3div.querySelectorAll('.tabs')[0]?.querySelectorAll('.tab').forEach((el,i)=>{
+      el.classList.toggle('on', ['day','tbl','soon','print'][i]===t);
+    });
+  }
+  if(t==='soon') renderComingSoon();
+  if(t==='print'){
+    buildPrintSchedule();
+    document.getElementById('printDlBtn').style.display = printSched.length ? '' : 'none';
+  }
 }
 
 // ══════════════════════════════════════════════════════
@@ -551,7 +1033,7 @@ function applyFilters(rows){
     name:     g(r,'JobName','Job Name','jobname'),
     qty:      parseFloat(g(r,'Job Qty','JobQty','Job\nQty'))||0,
     cut:      parseFloat(g(r,'Tot. Cut    SH','Tot. Cut SH','Tot.Cut SH','Tot. Cut\n   SH','Total Cut Sheet','TotCutSH','Cut Sheet'))||0,
-    dim:      g(r,'CartonDim.','Carton Dim','CartonDim','Carton Dimension','CartonDimension')||'Unknown',
+    dim:      (g(r,'CartonDim.','Carton Dim','CartonDim','Carton Dimension','CartonDimension')||'Unknown').replace(/\s+/g,''),
     itemType: g(r,'Item Type','ItemType','Item_Type','ITEM TYPE'),
     cls:      g(r,'Item Class','ItemClass'),
     status:   g(r,'Job_Status','Job Status','JobStatus'),
@@ -580,6 +1062,8 @@ function renderPg2(){
     <div class="kpi"><div class="kpi-val">${dims}</div><div class="kpi-lbl">Unique Dims</div></div>`;
 
   document.getElementById('cnt2').textContent = clean.length + ' JOBS';
+  const tqT = clean.reduce((a,r)=>a+r.qty,0);
+  const tcT = clean.reduce((a,r)=>a+r.cut,0);
   document.getElementById('tb2').innerHTML = clean.map((r,i)=>`
     <tr class="${r.status==='PH'?'ph-row':''}">
       <td>${i+1}</td><td><b>${r.jcno}</b></td><td>${r.docDate}</td><td>${r.cust}</td>
@@ -587,11 +1071,19 @@ function renderPg2(){
       <td>${r.qty.toLocaleString()}</td>
       <td>${r.cut.toLocaleString()}</td>
       <td><b>${r.dim}</b></td>
+      <td style="font-family:'DM Mono',monospace;font-size:10px;color:#f97316;">${getDie(r.dim)}</td>
       <td>${r.itemType}</td>
       <td>${r.cls}</td>
       <td><span class="pill ${pc(r.status)}">${r.status}</span></td>
       <td>${r.commit}</td>
-    </tr>`).join('');
+    </tr>`).join('') +
+    `<tr style="height:6px;background:#0D1B2A;"><td colspan="13" style="border-top:2px solid #334155;padding:0;"></td></tr>
+    <tr style="background:#0D1B2A;font-weight:800;">
+      <td colspan="5" style="text-align:right;color:#475569;font-size:10px;letter-spacing:1px;padding:10px 14px;">📊 GRAND TOTAL</td>
+      <td style="color:#22c55e;font-family:'DM Mono',monospace;font-size:14px;padding:10px 8px;">${tqT.toLocaleString()}</td>
+      <td style="color:#f97316;font-family:'DM Mono',monospace;font-size:14px;padding:10px 8px;">${tcT.toLocaleString()}</td>
+      <td colspan="6" style="color:#475569;font-size:10px;padding:10px 8px;">${clean.length} jobs total</td>
+    </tr>`;
 
   toast(`✅ ${clean.length} jobs cleaned & ready!`);
 }
@@ -733,15 +1225,19 @@ function renderPg3(){
 }
 
 function renderDayCards(){
-  // collect all unique keys (each job's start day)
+  // collect all unique keys (each job's start day + coming soon days)
   let keySet = new Set(sched.map(j=>j.sKey));
+  // Add coming soon expected punch dates too
+  comingSoon.forEach(j => { if(j.expPunch) keySet.add(j.expPunch); });
   let keys = [...keySet].sort();
 
   let html = '';
   keys.forEach(key=>{
     let dayJobs = sched.filter(j=>j.sKey===key);
-    // also in-progress: started before, ends after this day
     let ipJobs  = sched.filter(j=>j.sKey<key && j.eKey>=key);
+    // Coming soon jobs expected on this day
+    let csJobs  = comingSoon.filter(j=>j.expPunch===key);
+
     let b1s = dayJobs.filter(j=>j.mach==='B1');
     let b2s = dayJobs.filter(j=>j.mach==='B2');
     let b1ip = ipJobs.filter(j=>j.mach==='B1');
@@ -752,12 +1248,19 @@ function renderDayCards(){
     let total = dayJobs.length + ipJobs.length;
     let dlBtn = `<button class="btn btn-green btn-sm" onclick="dlDay('${key}')">⬇️ Excel</button>`;
 
+    // Coming soon cards HTML
+    let csHtml = csJobs.length ? `
+      <div style="margin-top:10px;border-top:1px dashed #f97316;padding-top:10px;">
+        <div style="font-size:10px;font-weight:700;color:#f97316;letter-spacing:1px;margin-bottom:8px;">🔜 COMING SOON — PRINTING PIPELINE</div>
+        ${csJobs.map(j=>csCard(j)).join('')}
+      </div>` : '';
+
     html += `
     <div class="day-block">
       <div class="day-hd">
         <h3>📅 ${dateLabel}</h3>
         <div style="display:flex;align-items:center;gap:10px;">
-          <span class="dmeta">Starting: ${dayJobs.length} | In Progress: ${ipJobs.length}</span>
+          <span class="dmeta">Starting: ${dayJobs.length} | In Progress: ${ipJobs.length}${csJobs.length?' | 🔜 '+csJobs.length+' Coming':''}</span>
           ${dlBtn}
         </div>
       </div>
@@ -779,11 +1282,48 @@ function renderDayCards(){
           ${(!b2s.length && !b2ip.length)?'<div class="idle">No jobs on this date</div>':''}
         </div>
       </div>
+      ${csHtml}
+      <div style="background:#0D1B2A;border-top:2px solid #1A2B40;padding:10px 18px;display:flex;gap:24px;align-items:center;">
+        <span style="font-size:10px;font-weight:700;color:#64748b;letter-spacing:1px;">📊 DAY TOTAL</span>
+        <span style="font-family:'DM Mono',monospace;font-size:13px;color:#22c55e;font-weight:700;">Qty: ${[...dayJobs,...ipJobs].reduce((a,j)=>a+j.qty,0).toLocaleString()}</span>
+        <span style="font-family:'DM Mono',monospace;font-size:13px;color:#f97316;font-weight:700;">Cut Sheets: ${[...dayJobs,...ipJobs].reduce((a,j)=>a+j.cut,0).toLocaleString()}</span>
+        <span style="font-size:10px;color:#475569;">Starting: ${dayJobs.reduce((a,j)=>a+j.qty,0).toLocaleString()} qty / ${dayJobs.reduce((a,j)=>a+j.cut,0).toLocaleString()} sheets</span>
+      </div>
     </div>`;
   });
 
   document.getElementById('dayCards').innerHTML = html ||
     '<p style="color:var(--muted);text-align:center;padding:40px;">No schedule data</p>';
+}
+
+function csCard(j){
+  return `
+  <div class="jcard is-cs">
+    <div class="jname">🔜 COMING SOON — ${j.name}</div>
+    <div class="jmeta">
+      <span>📋 ${j.jcno}</span>
+      <span>📦 ${(j.qty||0).toLocaleString()} pcs</span>
+      <span>✂️ ${(j.cut||0).toLocaleString()} sheets</span>
+      <span>📐 ${j.dim||'—'}</span>
+      ${j.itemType?`<span>🏷️ ${j.itemType}</span>`:''}
+      <span>🖨️ ${j.machine}</span>
+      <span style="color:#f97316;">⚙️ Now: ${j.next||j.status}</span>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+      <div class="jt-box" style="background:#2a1f00;border-color:#f97316;flex:1;min-width:120px;">
+        <div class="jt-lbl">📅 Expected Punch Date</div>
+        <div class="jt-time" style="color:#f97316;">${j.expPunch}</div>
+      </div>
+      <div class="jt-box" style="background:#2a1f00;border-color:#eab308;flex:1;min-width:120px;">
+        <div class="jt-lbl">🎯 Commit Date</div>
+        <div class="jt-time" style="color:#eab308;">${j.commit||'—'}</div>
+      </div>
+      <div class="jt-box" style="background:#2a1f00;border-color:#64748b;flex:1;min-width:80px;">
+        <div class="jt-lbl">🔢 Priority</div>
+        <div class="jt-time" style="color:#fff;">#${j.priority}</div>
+      </div>
+    </div>
+  </div>`;
 }
 
 function jCard(j, inProgress){
@@ -824,19 +1364,30 @@ function jCard(j, inProgress){
 }
 
 function renderTable3(){
+  const tq3 = sched.reduce((a,j)=>a+j.qty,0);
+  const tc3 = sched.reduce((a,j)=>a+j.cut,0);
   document.getElementById('tb3').innerHTML = sched.map(j=>`
     <tr class="${j.mach==='B1'?'b1-row':'b2-row'}${j.status==='PH'?' ph-row':''}">
       <td>${j.sr}</td><td><b>${j.jcno}</b></td><td>${j.cust}</td>
       <td style="max-width:150px;">${j.urgent?'⚡ ':''}${j.name}</td>
       <td>${j.qty.toLocaleString()}</td><td>${j.cut.toLocaleString()}</td>
-      <td>${j.dim}</td><td>${j.itemType}</td>
+      <td>${j.dim}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:10px;color:#f97316;">${getDie(j.dim)}</td>
+      <td>${j.itemType}</td>
       <td><span class="pill ${pc(j.status)}">${j.status}</span></td>
       <td><span class="pill ${j.mach==='B1'?'p-b1':'p-b2'}">${j.mach}</span></td>
       <td>${j.mrLabel}</td>
       <td><b>${j.mrTime}</b></td><td>${j.mrDate}</td>
       <td><b>${j.psTime}</b></td><td>${j.psDate}</td>
       <td><b>${j.eTime}</b></td><td>${j.eDate}</td>
-    </tr>`).join('');
+    </tr>`).join('') +
+    `<tr style="height:6px;background:#0D1B2A;"><td colspan="18" style="border-top:2px solid #334155;padding:0;"></td></tr>
+    <tr style="background:#0D1B2A;font-weight:800;">
+      <td colspan="4" style="text-align:right;color:#475569;font-size:10px;letter-spacing:1px;padding:10px 14px;">📊 GRAND TOTAL</td>
+      <td style="color:#22c55e;font-family:'DM Mono',monospace;font-size:14px;padding:10px 8px;">${tq3.toLocaleString()}</td>
+      <td style="color:#f97316;font-family:'DM Mono',monospace;font-size:14px;padding:10px 8px;">${tc3.toLocaleString()}</td>
+      <td colspan="12" style="color:#475569;font-size:10px;padding:10px 8px;">${sched.length} jobs scheduled</td>
+    </tr>`;
 }
 
 // ══════════════════════════════════════════════════════
@@ -875,148 +1426,77 @@ function addUrgent(){
 // EXCEL DOWNLOAD
 // ══════════════════════════════════════════════════════
 function dlDay(key){
-  if(typeof XLSX==='undefined'){ toast('❌ XLSX library missing!'); return; }
+  if(!sched.length){ toast('⚠️ Schedule nahi hai!'); return; }
+
+  let dateLabel = new Date(key+'T12:00:00').toLocaleDateString('en-IN',
+    {weekday:'long',day:'2-digit',month:'short',year:'numeric'});
 
   let startJobs = sched.filter(j=>j.sKey===key);
   let ipJobs    = sched.filter(j=>j.sKey<key && j.eKey>=key);
-  if(!startJobs.length && !ipJobs.length){ toast('⚠️ Koi job nahi!'); return; }
+  let allDay    = [...startJobs,...ipJobs];
+  if(!allDay.length){ toast('⚠️ Is din koi job nahi!'); return; }
 
-  let dateLabel = new Date(key+'T12:00:00').toLocaleDateString('en-IN',
-    {day:'2-digit',month:'short',year:'numeric'});
-
-  let wb = XLSX.utils.book_new();
-
-  // ── HDR ──
-  let HDR = ['Sr No','JCNO','Customer Name','Job Name','Job Qty','Total Cut Sheet',
-    'Carton Dimension','Item Type','Item Class','Job Status','Commit Date','Machine',
-    'Make Ready Type',
-    'MR Start Time','MR Start Date','MR Shift',
-    'Production Start Time','Production Start Date','Production Shift',
-    'Job Complete Time','Job Complete Date','Complete Shift','Remarks'];
-
-  let startRows = startJobs.map(j=>[
-    j.sr,j.jcno,j.cust,j.name,j.qty,j.cut,j.dim,j.itemType,j.cls,j.status,j.commit,j.mach,j.mrLabel,
-    j.mrTime,j.mrDate,j.mrShift,j.psTime,j.psDate,j.psShift,j.eTime,j.eDate,j.eShift,
-    j.sKey===j.eKey?'✅ Completes Today':`⏳ Continues till ${j.eDate}`
-  ]);
-
-  let ipRows = ipJobs.map(j=>[
-    j.sr,j.jcno,j.cust,j.name,j.qty,j.cut,j.dim,j.itemType,j.cls,j.status,j.commit,j.mach,j.mrLabel,
-    j.mrTime,j.mrDate,j.mrShift,j.psTime,j.psDate,j.psShift,j.eTime,j.eDate,j.eShift,
-    `🔄 In Progress — Started ${j.mrDate}, Completes ${j.eDate}`
-  ]);
-
-  // ── SHEET 1: B1+B2 Combined ──
-  let b1start = startJobs.filter(j=>j.mach==='B1');
-  let b2start = startJobs.filter(j=>j.mach==='B2');
-  let b1ip    = ipJobs.filter(j=>j.mach==='B1');
-  let b2ip    = ipJobs.filter(j=>j.mach==='B2');
-
-  let sheetData = [];
-
-  // B1 section header
-  sheetData.push([`🔵 MACHINE B1 — ${dateLabel}`, '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', `Active: ${b1start.length+b1ip.length} jobs`]);
-  sheetData.push(HDR);
-  b1ip.forEach(j=>sheetData.push([j.sr,j.jcno,j.cust,j.name,j.qty,j.cut,j.dim,j.itemType,j.cls,j.status,j.commit,j.mach,j.mrLabel,j.mrTime,j.mrDate,j.mrShift,j.psTime,j.psDate,j.psShift,j.eTime,j.eDate,j.eShift,`🔄 In Progress — Completes ${j.eDate}`]));
-  b1start.forEach(j=>sheetData.push([j.sr,j.jcno,j.cust,j.name,j.qty,j.cut,j.dim,j.itemType,j.cls,j.status,j.commit,j.mach,j.mrLabel,j.mrTime,j.mrDate,j.mrShift,j.psTime,j.psDate,j.psShift,j.eTime,j.eDate,j.eShift,j.sKey===j.eKey?'✅ Completes Today':`⏳ Continues till ${j.eDate}`]));
-
-  // divider
-  sheetData.push(['═══════════════════════════════════════════════════════════════════════════']);
-
-  // B2 section header
-  sheetData.push([`🟢 MACHINE B2 — ${dateLabel}`, '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', `Active: ${b2start.length+b2ip.length} jobs`]);
-  sheetData.push(HDR);
-  b2ip.forEach(j=>sheetData.push([j.sr,j.jcno,j.cust,j.name,j.qty,j.cut,j.dim,j.itemType,j.cls,j.status,j.commit,j.mach,j.mrLabel,j.mrTime,j.mrDate,j.mrShift,j.psTime,j.psDate,j.psShift,j.eTime,j.eDate,j.eShift,`🔄 In Progress — Completes ${j.eDate}`]));
-  b2start.forEach(j=>sheetData.push([j.sr,j.jcno,j.cust,j.name,j.qty,j.cut,j.dim,j.itemType,j.cls,j.status,j.commit,j.mach,j.mrLabel,j.mrTime,j.mrDate,j.mrShift,j.psTime,j.psDate,j.psShift,j.eTime,j.eDate,j.eShift,j.sKey===j.eKey?'✅ Completes Today':`⏳ Continues till ${j.eDate}`]));
-
-  let ws = XLSX.utils.aoa_to_sheet(sheetData);
-  ws['!cols'] = [5,13,22,32,9,11,18,16,12,12,10,9,16,12,13,10,12,13,10,12,13,10,28].map(w=>({wch:w}));
-
-  // color rows
-  const allRows = sheetData;
-  allRows.forEach((row, ri)=>{
-    let rn = ri+1;
-    let isHdr = row[0] && typeof row[0]==='string' && (row[0].includes('MACHINE B1')||row[0].includes('MACHINE B2')||row[0]==='Sr No'||row[0].includes('═'));
-    let mach  = row[11];
-    let isIP  = typeof row[22]==='string' && row[22].includes('In Progress');
-    let isPH  = row[9]==='PH';
-
-    let bg = mach==='B1' ? 'EFF6FF' : mach==='B2' ? 'F0FDF4' : 'FFFFFF';
-    if(isPH) bg = 'FEF3C7';
-    if(isIP) bg = 'FFF7ED';
-
-    for(let ci=0; ci<HDR.length; ci++){
-      let addr = XLSX.utils.encode_cell({r:ri, c:ci});
-      if(!ws[addr]) continue;
-      if(isHdr){
-        let hbg = row[0] && row[0].includes('B1') ? '1E40AF' : row[0] && row[0].includes('B2') ? '166534' : row[0]==='Sr No' ? '1C3557' : '374151';
-        ws[addr].s = {font:{bold:true,color:{rgb:'FFFFFF'},sz:9}, fill:{fgColor:{rgb:hbg}}, alignment:{horizontal:'center',wrapText:true}};
-        // color header groups
-        if(row[0]==='Sr No'){
-          let ambCols = [13,14,15]; let bluCols = [16,17,18]; let grnCols = [19,20,21];
-          if(ambCols.includes(ci)) ws[addr].s.fill = {fgColor:{rgb:'92400E'}};
-          else if(bluCols.includes(ci)) ws[addr].s.fill = {fgColor:{rgb:'1E40AF'}};
-          else if(grnCols.includes(ci)) ws[addr].s.fill = {fgColor:{rgb:'166534'}};
-        }
-      } else {
-        ws[addr].s = {fill:{fgColor:{rgb:bg}}, font:{sz:9}};
-        // time columns bold
-        if([13,16,19].includes(ci)) ws[addr].s.font = {bold:true, sz:9};
-      }
-    }
-  });
-
-  XLSX.utils.book_append_sheet(wb, ws, 'B1 + B2 Schedule');
-
-  // ── SHEET 2: Summary ──
-  let allDay = [...startJobs,...ipJobs];
-  let sumRows = [
-    ['AIA INDUSTRIES — DAILY PUNCHING SCHEDULE',''],['',''],
-    ['Date', dateLabel],
-    ['Generated', new Date().toLocaleDateString('en-IN')],['',''],
-    ['── SHIFT TIMINGS ──',''],
-    ['Shift 1','07:00 AM – 07:00 PM (12 hrs)'],
-    ['Lunch Break','01:30 PM – 02:00 PM (30 min)'],
-    ['Shift Change (eve)','07:00 PM – 07:30 PM (30 min dead)'],
-    ['Shift 2','07:30 PM – 07:00 AM (11.5 hrs)'],
-    ['Dinner Break','10:00 PM – 10:30 PM (30 min)'],
-    ['Shift Change (morn)','07:00 AM – 07:30 AM (30 min dead)'],
-    ['Shift 1 Working','690 min = 11.5 hrs'],
-    ['Shift 2 Working','630 min = 10.5 hrs'],
-    ['Total Working Hours','1320 min = 22 hrs / Day'],
-    ['Machine Speed','5,000 cut sheets / hour'],['',''],
-    ['── TODAY\'S SUMMARY ──',''],
-    ['Jobs Starting Today', startJobs.length],
-    ['Jobs In Progress (carried over)', ipJobs.length],
-    ['Total Active Jobs', allDay.length],
-    ['Machine B1 Jobs', allDay.filter(j=>j.mach==='B1').length],
-    ['Machine B2 Jobs', allDay.filter(j=>j.mach==='B2').length],
-    ['Total Cut Sheet (starting)', startJobs.reduce((a,j)=>a+j.cut,0)],
-    ['PH Priority Jobs', allDay.filter(j=>j.status==='PH').length],
-  ];
-  let ws2 = XLSX.utils.aoa_to_sheet(sumRows);
-  ws2['!cols'] = [{wch:32},{wch:30}];
-  XLSX.utils.book_append_sheet(wb, ws2, 'Summary');
-
-  XLSX.writeFile(wb, `AIA_Punching_${key.replace(/-/g,'_')}.xlsx`);
+  buildAndSaveXL([{
+    sheetName: 'Schedule',
+    dateLabel,
+    b1Start: startJobs.filter(j=>j.mach==='B1'),
+    b2Start: startJobs.filter(j=>j.mach==='B2'),
+    b1IP:    ipJobs.filter(j=>j.mach==='B1'),
+    b2IP:    ipJobs.filter(j=>j.mach==='B2'),
+  }], `AIA_Punching_${key.replace(/-/g,'_')}.xlsx`);
   toast(`⬇️ ${dateLabel} Excel ready!`);
 }
 
-function dlAllDays(){
+async function dlAllDays(){
   if(!sched.length){ toast('⚠️ Schedule nahi hai!'); return; }
-  // all calendar days from first job start to last job end
+
+  // Collect all unique working days across ALL jobs (sKey to eKey range)
   let daySet = new Set();
   sched.forEach(j=>{
-    let d = new Date(j.sKey+'T12:00:00');
-    let end = new Date(j.eKey+'T12:00:00');
-    while(d <= end){
-      if(d.getDay()!==0) daySet.add(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
+    let d   = new Date((j.sKey||j.mrKey)+'T12:00:00');
+    let end = new Date((j.eKey||j.sKey)+'T12:00:00');
+    for(let i=0; i<=60; i++){           // max 60 day safety cap
+      if(d > end) break;
+      if(d.getDay() !== 0){             // skip Sunday
+        let iso = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+        daySet.add(iso);
+      }
       d.setDate(d.getDate()+1);
     }
   });
+
   let days = [...daySet].sort();
-  days.forEach((k,i)=>setTimeout(()=>dlDay(k), i*500));
-  toast(`⬇️ ${days.length} din ke Excel download ho rahe hain...`);
+  console.log('dlAllDays — total days:', days.length, days);
+
+  let sheets = days.map(key=>{
+    let dateLabel = new Date(key+'T12:00:00').toLocaleDateString('en-IN',
+      {weekday:'long',day:'2-digit',month:'short',year:'numeric'});
+    // startJobs: jobs whose MR starts on this day
+    let startJobs = sched.filter(j=>(j.sKey||j.mrKey)===key);
+    // ipJobs: jobs that started before this day and end on/after this day
+    let ipJobs    = sched.filter(j=>(j.sKey||j.mrKey)<key && (j.eKey||j.sKey)>=key);
+    if(!startJobs.length && !ipJobs.length) return null;
+    let sn = new Date(key+'T12:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short'}).replace(' ','-');
+    return {
+      sheetName: sn,
+      dateLabel,
+      b1Start: startJobs.filter(j=>j.mach==='B1'),
+      b2Start: startJobs.filter(j=>j.mach==='B2'),
+      b1IP:    ipJobs.filter(j=>j.mach==='B1'),
+      b2IP:    ipJobs.filter(j=>j.mach==='B2'),
+    };
+  }).filter(Boolean);
+
+  console.log('sheets to build:', sheets.length, sheets.map(s=>s.sheetName));
+  toast(`⏳ ${sheets.length} din ka Excel ban raha hai...`);
+
+  try {
+    await buildAndSaveXL(sheets, `AIA_Punching_ALL_DAYS_${new Date().toLocaleDateString('en-IN').replace(/\//g,'_')}.xlsx`);
+    toast(`⬇️ ${sheets.length} din ka combined Excel ready!`);
+  } catch(e){
+    toast('❌ Error: ' + e.message);
+    console.error(e);
+  }
 }
 
 function dlClean(){
@@ -1026,18 +1506,787 @@ function dlClean(){
   let rows = clean.map(r=>[r.sr,r.jcno,r.docDate,r.cust,r.name,r.qty,
     r.cut,r.dim,r.itemType,r.cls,r.status,r.commit]);
   let csv = [h,...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
-  let a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));
-  a.download = 'AIA_Clean_Punching_Data.csv';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+  const csvWb = XLSX.utils.book_new();
+  const csvWs = XLSX.utils.aoa_to_sheet([h,...rows]);
+  XLSX.utils.book_append_sheet(csvWb, csvWs, 'Clean Data');
+  XLSX.writeFile(csvWb, 'AIA_Clean_Data.xlsx');
+  toast('⬇️ AIA_Clean_Data.xlsx ready!');
   toast('⬇️ Clean CSV downloaded!');
 }
 
 // ══════════════════════════════════════════════════════
-// UI HELPERS
+// PRINTING SCHEDULE ENGINE
 // ══════════════════════════════════════════════════════
+
+// Print machine config: same speed as punching, separate queues
+// 4 Col & 6 Col machines, each with independent time pointer
+let printSched = [];    // full computed printing schedule
+let curPrintTab = 'all';
+
+// Printing machine speeds (same as punching: 5000 cut/hr)
+const PRINT_SPEED = 5000 / 60; // sheets per min
+const PRINT_MR_NEW  = 60; // min — new dim
+const PRINT_MR_SAME = 10; // min — same dim
+
+// Build printing schedule from comingSoon list
+function buildPrintSchedule(){
+  if(!comingSoon.length){ printSched = []; renderPrintView(); return; }
+
+  let PM = {
+    '4 Col': {wm: 0, lastDim: null},
+    '6 Col': {wm: 0, lastDim: null}
+  };
+
+  // Sort: by priority (user-set) then commit date
+  let sorted = [...comingSoon].sort((a,b)=>{
+    if(a.priority !== b.priority) return a.priority - b.priority;
+    return (a.commit||'').localeCompare(b.commit||'');
+  });
+
+  printSched = sorted.map((job, idx) => {
+    let mach = job.machine || '4 Col'; // '4 Col' or '6 Col'
+    let m = PM[mach] || PM['4 Col'];
+    let dim = job.dim || 'Unknown';
+    let cut = Math.max(job.cut || job.qty || 1, 1);
+
+    let mr = (m.lastDim === dim) ? PRINT_MR_SAME : PRINT_MR_NEW;
+    let mrLabel = (m.lastDim === dim) ? `Same Dim (${PRINT_MR_SAME}m)` : `New Dim (${PRINT_MR_NEW}m)`;
+    let proc = cut / PRINT_SPEED;
+
+    let mrStartWM   = m.wm;
+    let prodStartWM = mrStartWM + mr;
+    let eWM         = prodStartWM + proc;
+
+    let mrI  = wm2info(mrStartWM);
+    let psI  = wm2info(prodStartWM);
+    let eI   = wm2info(eWM);
+
+    m.wm      = eWM;
+    m.lastDim = dim;
+
+    return {
+      sr: idx+1, ...job,
+      printMach: mach,
+      mr, mrLabel, proc: Math.round(proc),
+      mrTime: mrI.timeStr, mrDate: mrI.dateStr, mrKey: mrI.dayKey, mrShift: mrI.shift,
+      psTime: psI.timeStr, psDate: psI.dateStr, psKey: psI.dayKey, psShift: psI.shift,
+      eTime:  eI.timeStr,  eDate:  eI.dateStr,  eKey:  eI.dayKey,  eShift:  eI.shift,
+      sKey: mrI.dayKey
+    };
+  });
+
+  renderPrintView();
+}
+
+function renderPrintView(){
+  let j4 = printSched.filter(j=>j.printMach==='4 Col');
+  let j6 = printSched.filter(j=>j.printMach==='6 Col');
+  let total4cut = j4.reduce((a,j)=>a+j.cut,0);
+  let total6cut = j6.reduce((a,j)=>a+j.cut,0);
+  let sd = BASE.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+
+  document.getElementById('kpiPrint').innerHTML = `
+    <div class="kpi"><div class="kpi-val">${printSched.length}</div><div class="kpi-lbl">Total Print Jobs</div></div>
+    <div class="kpi" style="border-left-color:#3B82F6;"><div class="kpi-val">${j4.length}</div><div class="kpi-lbl">4 Col Jobs</div></div>
+    <div class="kpi" style="border-left-color:#8b5cf6;"><div class="kpi-val">${j6.length}</div><div class="kpi-lbl">6 Col Jobs</div></div>
+    <div class="kpi k-amber"><div class="kpi-val">${(total4cut+total6cut).toLocaleString()}</div><div class="kpi-lbl">Total Cut Sheet</div></div>
+    <div class="kpi k-green"><div class="kpi-val">${total4cut.toLocaleString()}</div><div class="kpi-lbl">4 Col Cut</div></div>
+    <div class="kpi" style="border-left-color:#8b5cf6;"><div class="kpi-val">${total6cut.toLocaleString()}</div><div class="kpi-lbl">6 Col Cut</div></div>`;
+
+  renderPrintDays('all');
+  renderPrintDays('4col');
+  renderPrintDays('6col');
+  renderPrintTable();
+
+  document.getElementById('printBadge').textContent = printSched.length;
+  document.getElementById('printDlBtn').style.display = printSched.length ? '' : 'none';
+}
+
+function renderPrintDays(mode){
+  let jobs = mode==='4col' ? printSched.filter(j=>j.printMach==='4 Col') :
+             mode==='6col' ? printSched.filter(j=>j.printMach==='6 Col') :
+             printSched;
+
+  let keySet = new Set(jobs.map(j=>j.sKey));
+  let keys = [...keySet].sort();
+  let containerId = mode==='4col' ? 'print4cards' : mode==='6col' ? 'print6cards' : 'printDayCards';
+
+  if(!jobs.length){
+    document.getElementById(containerId).innerHTML = `<div style="text-align:center;padding:40px;color:#64748b;"><div style="font-size:36px;margin-bottom:12px;">🖨️</div><div>Printing schedule file upload nahi hua. Step 1 mein Printing Pipeline file upload karo.</div></div>`;
+    return;
+  }
+
+  let html = '';
+  keys.forEach(key => {
+    let dayJobs = jobs.filter(j=>j.sKey===key);
+    let ipJobs  = jobs.filter(j=>j.sKey<key && j.eKey>=key);
+    let dateLabel = new Date(key+'T12:00:00').toLocaleDateString('en-IN',
+      {weekday:'short',day:'2-digit',month:'short',year:'numeric'});
+    let total = dayJobs.length + ipJobs.length;
+
+    let jobs4s  = dayJobs.filter(j=>j.printMach==='4 Col');
+    let jobs6s  = dayJobs.filter(j=>j.printMach==='6 Col');
+    let jobs4ip = ipJobs.filter(j=>j.printMach==='4 Col');
+    let jobs6ip = ipJobs.filter(j=>j.printMach==='6 Col');
+
+    let show4 = jobs4s.length || jobs4ip.length;
+    let show6 = jobs6s.length || jobs6ip.length;
+    let totalCut = dayJobs.reduce((a,j)=>a+j.cut,0);
+
+    html += `
+    <div class="day-block">
+      <div class="day-hd">
+        <h3>🖨️ ${dateLabel}</h3>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <span class="dmeta">Starting: ${dayJobs.length} | In Progress: ${ipJobs.length} | Total Cut: ${totalCut.toLocaleString()}</span>
+          <button class="btn btn-green btn-sm" onclick="dlPrintDay('${key}')">⬇️ Excel</button>
+        </div>
+      </div>
+      <div class="shift-bar">
+        <span>⏰ Shift 1: 07:00 AM – 07:00 PM &nbsp;|&nbsp; Lunch: 01:30 PM – 02:00 PM</span>
+        <span>🌙 Shift 2: 07:30 PM – 07:00 AM &nbsp;|&nbsp; Dinner: 10:00 PM – 10:30 PM</span>
+      </div>
+      <div class="print-mach-row">
+        <div class="print-mach-col">
+          <span class="mach-lbl pmach-lbl-4c">🔵 4 COL MACHINE</span>
+          ${jobs4ip.map(j=>pCard(j,true)).join('')}
+          ${jobs4s.map(j=>pCard(j,false)).join('')}
+          ${(!show4)?'<div class="idle">No 4 Col jobs on this date</div>':''}
+        </div>
+        <div class="print-mach-col">
+          <span class="mach-lbl pmach-lbl-6c">🟣 6 COL MACHINE</span>
+          ${jobs6ip.map(j=>pCard(j,true)).join('')}
+          ${jobs6s.map(j=>pCard(j,false)).join('')}
+          ${(!show6)?'<div class="idle">No 6 Col jobs on this date</div>':''}
+        </div>
+      </div>
+    </div>`;
+  });
+
+  document.getElementById(containerId).innerHTML = html;
+}
+
+function pCard(j, inProgress){
+  let cls = inProgress ? 'pc-ip' : j.printMach==='4 Col' ? 'pc-4c' : 'pc-6c';
+  let tag = inProgress ? '🔄 IN PROGRESS — ' : '';
+  let multiDay = j.sKey !== j.eKey;
+  let procHrs = (j.proc/60).toFixed(1);
+  let statusPill = j.next||j.status||'—';
+  return `
+  <div class="pcard ${cls}">
+    <div class="jname">${tag}${j.name}</div>
+    <div class="jmeta">
+      <span>📋 ${j.jcno}</span>
+      <span>📦 ${(j.qty||0).toLocaleString()} pcs</span>
+      <span>✂️ ${(j.cut||0).toLocaleString()} sheets</span>
+      <span>📐 ${j.dim||'—'}</span>
+      ${j.itemType?`<span>🏷️ ${j.itemType}</span>`:''}
+      <span>⏱️ ${procHrs} hrs</span>
+      <span style="background:#1e293b;color:#94a3b8;padding:1px 7px;border-radius:10px;font-size:9px;">⚙️ ${statusPill}</span>
+      ${multiDay?'<span style="color:var(--accent);font-weight:700;">🔁 Multi-day</span>':''}
+    </div>
+    <div class="jtimes">
+      <div class="jt-box jt-mr">
+        <div class="jt-lbl">🔧 Make Ready (${j.mr}m)</div>
+        <div class="jt-time">${j.mrTime}</div>
+        <div class="jt-date">${j.mrDate} · ${j.mrShift}</div>
+      </div>
+      <div class="jt-box jt-ps">
+        <div class="jt-lbl">🖨️ Print Start</div>
+        <div class="jt-time">${j.psTime}</div>
+        <div class="jt-date">${j.psDate} · ${j.psShift}</div>
+      </div>
+      <div class="jt-box jt-ec">
+        <div class="jt-lbl">✅ Complete ${multiDay?'🔁':''}</div>
+        <div class="jt-time">${j.eTime}</div>
+        <div class="jt-date">${j.eDate} · ${j.eShift}</div>
+      </div>
+    </div>
+    ${j.commit?`<div style="margin-top:5px;font-size:10px;color:#f59e0b;">🎯 Commit: <b>${j.commit}</b></div>`:''}
+  </div>`;
+}
+
+function renderPrintTable(){
+  document.getElementById('printTblCount').textContent = printSched.length + ' JOBS';
+  document.getElementById('tbPrint').innerHTML = printSched.map(j=>`
+    <tr class="${j.printMach==='4 Col'?'b1-row':'b2-row'}">
+      <td>${j.sr}</td>
+      <td><b>${j.jcno}</b></td>
+      <td>${j.cust}</td>
+      <td style="max-width:150px;">${j.name}</td>
+      <td>${(j.qty||0).toLocaleString()}</td>
+      <td>${(j.cut||0).toLocaleString()}</td>
+      <td>${j.dim||'—'}</td>
+      <td>${j.itemType||'—'}</td>
+      <td><span class="pill ${j.printMach==='4 Col'?'p-4c':'p-6c'}">${j.printMach}</span></td>
+      <td>${j.next||j.status||'—'}</td>
+      <td>${j.mrLabel}</td>
+      <td><b>${j.mrTime}</b></td><td>${j.mrDate}</td>
+      <td><b>${j.psTime}</b></td><td>${j.psDate}</td>
+      <td><b>${j.eTime}</b></td><td>${j.eDate}</td>
+      <td>${j.commit||'—'}</td>
+    </tr>`).join('');
+}
+
+function switchPrintTab(t){
+  ['all','4col','6col','ptbl'].forEach(x=>{
+    document.getElementById('print'+({all:'All',['4col']:'4col',['6col']:'6col',ptbl:'Tbl'}[x]||x.charAt(0).toUpperCase()+x.slice(1))+'View')
+    ?.classList.toggle('hidden', x!==t);
+  });
+  // simpler toggle
+  ['printAllView','print4colView','print6colView','printTblView'].forEach((id,i)=>{
+    document.getElementById(id)?.classList.toggle('hidden', i !== ['all','4col','6col','ptbl'].indexOf(t));
+  });
+  document.querySelectorAll('#printSubTabs .tab').forEach((el,i)=>{
+    el.classList.toggle('on', i === ['all','4col','6col','ptbl'].indexOf(t));
+  });
+  curPrintTab = t;
+}
+
+// ── Download Printing Schedule Excel for a single day ──
+function dlPrintDay(key){
+  let dateLabel = new Date(key+'T12:00:00').toLocaleDateString('en-IN',
+    {weekday:'long',day:'2-digit',month:'short',year:'numeric'});
+  let startJobs = printSched.filter(j=>j.sKey===key);
+  let ipJobs    = printSched.filter(j=>j.sKey<key && j.eKey>=key);
+  buildAndSavePrintXL([{
+    sheetName: 'Printing Schedule',
+    dateLabel,
+    c4Start: startJobs.filter(j=>j.printMach==='4 Col'),
+    c6Start: startJobs.filter(j=>j.printMach==='6 Col'),
+    c4IP:    ipJobs.filter(j=>j.printMach==='4 Col'),
+    c6IP:    ipJobs.filter(j=>j.printMach==='6 Col'),
+  }], `AIA_Printing_${key.replace(/-/g,'_')}.xlsx`);
+  toast(`⬇️ Printing schedule ${dateLabel} ready!`);
+}
+
+function dlPrintingExcel(){
+  if(!printSched.length){ toast('⚠️ Printing schedule nahi hai!'); return; }
+  let daySet = new Set();
+  printSched.forEach(j=>{
+    let d = new Date(j.sKey+'T12:00:00'), end = new Date(j.eKey+'T12:00:00');
+    while(d<=end){
+      if(d.getDay()!==0) daySet.add(d.toISOString().slice(0,10));
+      d.setDate(d.getDate()+1);
+    }
+  });
+  let days = [...daySet].sort();
+  let sheets = days.map(key=>{
+    let dateLabel = new Date(key+'T12:00:00').toLocaleDateString('en-IN',
+      {weekday:'long',day:'2-digit',month:'short',year:'numeric'});
+    let startJobs = printSched.filter(j=>j.sKey===key);
+    let ipJobs    = printSched.filter(j=>j.sKey<key && j.eKey>=key);
+    if(!startJobs.length && !ipJobs.length) return null;
+    return {
+      sheetName: new Date(key+'T12:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short'}).replace(' ','-'),
+      dateLabel,
+      c4Start: startJobs.filter(j=>j.printMach==='4 Col'),
+      c6Start: startJobs.filter(j=>j.printMach==='6 Col'),
+      c4IP:    ipJobs.filter(j=>j.printMach==='4 Col'),
+      c6IP:    ipJobs.filter(j=>j.printMach==='6 Col'),
+    };
+  }).filter(Boolean);
+  buildAndSavePrintXL(sheets, `AIA_Printing_ALL_DAYS_${new Date().toLocaleDateString('en-IN').replace(/\//g,'_')}.xlsx`);
+  toast(`⬇️ ${days.length} din ka Printing Excel ready!`);
+}
+
+
+// ══════════════════════════════════════════════════════
+// PURE JS XLSX BUILDER — No CDN needed, full color support
+// ══════════════════════════════════════════════════════
+
+const XC = {
+  navy:'0F2744', dark:'0D1B2A', b1bg:'DBEAFE', b2bg:'DCFCE7',
+  ipbg:'FFF7ED', phbg:'FEF3C7', hdrB1:'1E3A8A', hdrB2:'14532D',
+  hdr4c:'1E3A8A', hdr6c:'7E22CE', green:'22C55E', orange:'F97316',
+  white:'FFFFFF', slate:'94A3B8', total:'1A2B40', sep:'334155',
+  c4row:'EFF6FF', c6row:'F5F3FF', ipc4:'FFF7ED', ipc6:'FDF4FF'
+};
+
+// ── XML Helpers ──
+function xesc(v){ return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function xlsxSave(sheetXmls, sheetNames, filename){
+  // Build a minimal .xlsx (ZIP) using pure JS
+  // Shared strings
+  let strMap={}, strArr=[], nextStr=0;
+  function si(v){ let s=String(v==null?'':v); if(s===''||typeof v==='number') return null; if(strMap[s]===undefined){strMap[s]=nextStr++;strArr.push(s);} return strMap[s]; }
+
+  // Pre-scan all cell values to build shared strings
+  // (we'll embed them inline as inlineStr for simplicity — avoids 2-pass)
+
+  // Styles
+  const fills = [
+    'none','none', // 0=none(default), 1=gray(reserved)
+    XC.navy, XC.dark, XC.b1bg, XC.b2bg, XC.ipbg, XC.phbg,
+    XC.hdrB1, XC.hdrB2, XC.hdr4c, XC.hdr6c, XC.total, XC.sep,
+    XC.c4row, XC.c6row, XC.ipc4, XC.ipc6,
+    '1A0050' // 18 = print title
+  ];
+  function fillIdx(hex){ let i=fills.indexOf(hex); return i>=2?i:0; }
+
+  const styleXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<fonts count="8">
+  <font><sz val="9"/><color rgb="FF1E293B"/><name val="Calibri"/></font>
+  <font><b/><sz val="9"/><color rgb="FF1E293B"/><name val="Calibri"/></font>
+  <font><b/><sz val="11"/><color rgb="FF1E293B"/><name val="Calibri"/></font>
+  <font><b/><sz val="13"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font>
+  <font><b/><sz val="9"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font>
+  <font><b/><sz val="11"/><color rgb="FF22C55E"/><name val="Calibri"/></font>
+  <font><b/><sz val="11"/><color rgb="FFF97316"/><name val="Calibri"/></font>
+  <font><sz val="9"/><color rgb="FF94A3B8"/><name val="Calibri"/></font>
+</fonts>
+<fills count="${fills.length}">
+  <fill><patternFill patternType="none"/></fill>
+  <fill><patternFill patternType="gray125"/></fill>
+  ${fills.slice(2).map(h=>`<fill><patternFill patternType="solid"><fgColor rgb="FF${h}"/></patternFill></fill>`).join('')}
+</fills>
+<borders count="3">
+  <border><left/><right/><top/><bottom/><diagonal/></border>
+  <border><left style="thin"><color rgb="FFCBD5E1"/></left><right style="thin"><color rgb="FFCBD5E1"/></right><top style="thin"><color rgb="FFCBD5E1"/></top><bottom style="thin"><color rgb="FFCBD5E1"/></bottom><diagonal/></border>
+  <border><left/><right/><top style="medium"><color rgb="FF334155"/></top><bottom/><diagonal/></border>
+</borders>
+<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+<cellXfs count="30">
+  <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><!-- 0 default -->
+  <xf numFmtId="0" fontId="3" fillId="${fillIdx(XC.navy)}" borderId="0" xfId="0"><alignment horizontal="left" vertical="center"/></xf><!-- 1 title -->
+  <xf numFmtId="0" fontId="7" fillId="${fillIdx(XC.dark)}" borderId="0" xfId="0"><alignment horizontal="left" vertical="center"/></xf><!-- 2 subtitle -->
+  <xf numFmtId="0" fontId="4" fillId="${fillIdx(XC.hdrB1)}" borderId="0" xfId="0"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><!-- 3 hdr B1 -->
+  <xf numFmtId="0" fontId="4" fillId="${fillIdx(XC.hdrB2)}" borderId="0" xfId="0"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><!-- 4 hdr B2 -->
+  <xf numFmtId="0" fontId="1" fillId="${fillIdx(XC.b1bg)}" borderId="1" xfId="0"><alignment vertical="center"/></xf><!-- 5 b1 row -->
+  <xf numFmtId="0" fontId="1" fillId="${fillIdx(XC.b2bg)}" borderId="1" xfId="0"><alignment vertical="center"/></xf><!-- 6 b2 row -->
+  <xf numFmtId="0" fontId="1" fillId="${fillIdx(XC.ipbg)}" borderId="1" xfId="0"><alignment vertical="center"/></xf><!-- 7 ip row -->
+  <xf numFmtId="0" fontId="1" fillId="${fillIdx(XC.phbg)}" borderId="1" xfId="0"><alignment vertical="center"/></xf><!-- 8 ph row -->
+  <xf numFmtId="0" fontId="5" fillId="${fillIdx(XC.total)}" borderId="2" xfId="0"><alignment vertical="center"/></xf><!-- 9 total qty -->
+  <xf numFmtId="0" fontId="6" fillId="${fillIdx(XC.total)}" borderId="2" xfId="0"><alignment vertical="center"/></xf><!-- 10 total cut -->
+  <xf numFmtId="0" fontId="7" fillId="${fillIdx(XC.total)}" borderId="2" xfId="0"><alignment vertical="center"/></xf><!-- 11 total label -->
+  <xf numFmtId="0" fontId="1" fillId="${fillIdx(XC.navy)}" borderId="2" xfId="0"><alignment vertical="center"/></xf><!-- 12 grand total -->
+  <xf numFmtId="0" fontId="5" fillId="${fillIdx(XC.navy)}" borderId="2" xfId="0"><alignment vertical="center"/></xf><!-- 13 grand qty -->
+  <xf numFmtId="0" fontId="6" fillId="${fillIdx(XC.navy)}" borderId="2" xfId="0"><alignment vertical="center"/></xf><!-- 14 grand cut -->
+  <xf numFmtId="0" fontId="4" fillId="${fillIdx(XC.hdrB1)}" borderId="0" xfId="0"><alignment horizontal="left" vertical="center"/></xf><!-- 15 mach section header -->
+  <xf numFmtId="0" fontId="4" fillId="${fillIdx(XC.hdrB2)}" borderId="0" xfId="0"><alignment horizontal="left" vertical="center"/></xf><!-- 16 mach section header B2 -->
+  <xf numFmtId="0" fontId="2" fillId="${fillIdx(XC.b1bg)}" borderId="1" xfId="0"><alignment vertical="center"/></xf><!-- 17 time bold b1 -->
+  <xf numFmtId="0" fontId="2" fillId="${fillIdx(XC.b2bg)}" borderId="1" xfId="0"><alignment vertical="center"/></xf><!-- 18 time bold b2 -->
+  <xf numFmtId="0" fontId="2" fillId="${fillIdx(XC.ipbg)}" borderId="1" xfId="0"><alignment vertical="center"/></xf><!-- 19 time bold ip -->
+  <xf numFmtId="0" fontId="2" fillId="${fillIdx(XC.phbg)}" borderId="1" xfId="0"><alignment vertical="center"/></xf><!-- 20 time bold ph -->
+  <xf numFmtId="0" fontId="3" fillId="${fillIdx('1A0050')}" borderId="0" xfId="0"><alignment horizontal="left" vertical="center"/></xf><!-- 21 print title -->
+  <xf numFmtId="0" fontId="4" fillId="${fillIdx(XC.hdr4c)}" borderId="0" xfId="0"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><!-- 22 hdr 4col -->
+  <xf numFmtId="0" fontId="4" fillId="${fillIdx(XC.hdr6c)}" borderId="0" xfId="0"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><!-- 23 hdr 6col -->
+  <xf numFmtId="0" fontId="4" fillId="${fillIdx(XC.hdr4c)}" borderId="0" xfId="0"><alignment horizontal="left" vertical="center"/></xf><!-- 24 sec hdr 4c -->
+  <xf numFmtId="0" fontId="4" fillId="${fillIdx(XC.hdr6c)}" borderId="0" xfId="0"><alignment horizontal="left" vertical="center"/></xf><!-- 25 sec hdr 6c -->
+  <xf numFmtId="0" fontId="1" fillId="${fillIdx(XC.c4row)}" borderId="1" xfId="0"><alignment vertical="center"/></xf><!-- 26 4col row -->
+  <xf numFmtId="0" fontId="1" fillId="${fillIdx(XC.c6row)}" borderId="1" xfId="0"><alignment vertical="center"/></xf><!-- 27 6col row -->
+  <xf numFmtId="0" fontId="1" fillId="${fillIdx(XC.ipc4)}" borderId="1" xfId="0"><alignment vertical="center"/></xf><!-- 28 ip4 row -->
+  <xf numFmtId="0" fontId="1" fillId="${fillIdx(XC.ipc6)}" borderId="1" xfId="0"><alignment vertical="center"/></xf><!-- 29 ip6 row -->
+</cellXfs>
+</styleSheet>`;
+
+  function cell(v, s){
+    if(v===''||v==null) return `<c s="${s||0}"><v/></c>`;
+    if(typeof v==='number') return `<c t="n" s="${s||0}"><v>${v}</v></c>`;
+    return `<c t="inlineStr" s="${s||0}"><is><t>${xesc(v)}</t></is></c>`;
+  }
+
+  function buildSheetXml(rows, colWidths){
+    let cols = colWidths.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join('');
+    let rowsXml = rows.map((row,ri)=>{
+      if(!row) return `<row r="${ri+1}" ht="6" customHeight="1"></row>`;
+      let {cells, ht} = row;
+      let cxml = cells.map((c,ci)=>{
+        let addr = String.fromCharCode(65+ci)+(ri+1);
+        if(ci>=26) addr = String.fromCharCode(65+Math.floor(ci/26)-1)+String.fromCharCode(65+ci%26)+(ri+1);
+        return `<c r="${addr}" t="inlineStr" s="${c.s||0}"><is><t>${xesc(c.v==null?'':c.v)}</t></is></c>`;
+      }).join('');
+      return `<row r="${ri+1}" ht="${ht||15}" customHeight="1">${cxml}</row>`;
+    }).join('');
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<cols>${cols}</cols>
+<sheetData>${rowsXml}</sheetData>
+</worksheet>`;
+  }
+
+  // Build ZIP
+  const zip = buildZip(sheetXmls.map((rows,i)=>({
+    name:`xl/worksheets/sheet${i+1}.xml`,
+    data: buildSheetXml(rows.rows, rows.colWidths)
+  })), styleXml, sheetNames);
+
+  // Use XLSX library to write — it handles the download internally
+  try {
+    const b64 = XLSX.write(wbXL, {bookType:'xlsx', type:'base64'});
+    const a = document.createElement('a');
+    a.href = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,' + b64;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(()=>document.body.removeChild(a), 100);
+  } catch(e){ toast('❌ Download error: '+e.message); console.error(e); }
+}
+
+// ── Row builders ──
+function pRow(cells, ht){ return {cells, ht}; }
+function pCell(v, s){ return {v, s}; }
+function emptyRow(n, s){ return pRow(Array(n).fill(0).map(()=>pCell('',s||0)), 6); }
+
+function buildPunchSheetRows(sheetInfo){
+  const {dateLabel, b1Start, b2Start, b1IP, b2IP} = sheetInfo;
+  const allDay = [...b1Start,...b2Start,...b1IP,...b2IP];
+  const NCols = 23;
+  const CW = [5,14,22,34,9,11,20,12,16,10,10,9,14,10,12,9,10,12,9,10,12,9,28];
+  const HDR = ['Sr','JCNO','Customer','Job Name','Qty','Cut Sheet','Dimension','Die No.',
+    'Item Type','Status','Commit','Machine','MR Type',
+    'MR Time','MR Date','MR Shift','Prod Start','Prod Date','Prod Shift',
+    'Complete','End Date','End Shift','Remarks'];
+
+  let rows = [];
+  // Title
+  let tCells = Array(NCols).fill(0).map((_,i)=>pCell(i===0?`AIA INDUSTRIES — PUNCHING SCHEDULE — ${dateLabel.toUpperCase()}`:'', 1));
+  rows.push(pRow(tCells, 26));
+  // Date info row
+  const allMRDates = [...b1Start,...b2Start,...b1IP,...b2IP].map(j=>j.mrDate).filter(Boolean);
+  const allEndDates = [...b1Start,...b2Start,...b1IP,...b2IP].map(j=>j.eDate).filter(Boolean);
+  const mrDateStr  = allMRDates.length  ? [...new Set(allMRDates)].join(', ')  : dateLabel;
+  const endDateStr = allEndDates.length ? [...new Set(allEndDates)].join(', ') : '—';
+  let dCells = Array(NCols).fill(0).map((_,i)=>pCell(i===0?`Shift 1: 07:00–19:00  |  Shift 2: 19:30–07:00  |  MR Date: ${mrDateStr}  |  Expected Completion: ${endDateStr}`:'', 2));
+  rows.push(pRow(dCells, 14));
+  // Subtitle
+  let sCells = Array(NCols).fill(0).map((_,i)=>pCell(i===0?`B1: ${b1Start.length+b1IP.length} jobs  |  B2: ${b2Start.length+b2IP.length} jobs  |  Total Qty: ${allDay.reduce((a,j)=>a+j.qty,0).toLocaleString()}  |  Total Cut: ${allDay.reduce((a,j)=>a+j.cut,0).toLocaleString()}`:'', 2));
+  rows.push(pRow(sCells, 14));
+  rows.push(emptyRow(NCols));
+
+  function addSec(ipJobs, startJobs, isB1){
+    const secS  = isB1 ? 15 : 16;
+    const hdrS  = isB1 ? 3  : 4;
+    const rowS  = isB1 ? 5  : 6;
+    const ipS   = 7;
+    const phS   = 8;
+    const timeSrow = isB1 ? 17 : 18;
+    const timeSip  = 19;
+    const label = isB1 ? 'MACHINE B1' : 'MACHINE B2';
+
+    let mhCells = Array(NCols).fill(0).map((_,i)=>pCell(i===0?label:'', secS));
+    rows.push(pRow(mhCells, 18));
+
+    if(!ipJobs.length && !startJobs.length){
+      rows.push(pRow([pCell('  — No jobs —', 2), ...Array(NCols-1).fill(0).map(()=>pCell('',2))], 14));
+      rows.push(emptyRow(NCols));
+      return;
+    }
+
+    rows.push(pRow(HDR.map(h=>pCell(h, hdrS)), 28));
+
+    ipJobs.forEach(j=>{
+      let vals = [j.sr,j.jcno,j.cust,j.name,j.qty,j.cut,j.dim,getDie(j.dim),j.itemType,j.status,j.commit,j.mach,j.mrLabel,j.mrTime,j.mrDate,j.mrShift,j.psTime,j.psDate,j.psShift,j.eTime,j.eDate,j.eShift,'In Progress'];
+      rows.push(pRow(vals.map((v,ci)=>pCell(v, [13,16,19].includes(ci)?timeSip:ipS)), 15));
+    });
+    startJobs.forEach(j=>{
+      const rs = j.status==='PH'?phS:rowS;
+      const ts = j.status==='PH'?20:timeSrow;
+      let vals = [j.sr,j.jcno,j.cust,j.name,j.qty,j.cut,j.dim,getDie(j.dim),j.itemType,j.status,j.commit,j.mach,j.mrLabel,j.mrTime,j.mrDate,j.mrShift,j.psTime,j.psDate,j.psShift,j.eTime,j.eDate,j.eShift,j.sKey===j.eKey?'Done Today':'Continues'];
+      rows.push(pRow(vals.map((v,ci)=>pCell(v, [13,16,19].includes(ci)?ts:rs)), 15));
+    });
+
+    const totJ = [...ipJobs,...startJobs];
+    let totCells = Array(NCols).fill(0).map((_,i)=>{
+      if(i===3) return pCell('TOTAL', 11);
+      if(i===4) return pCell(totJ.reduce((a,j)=>a+j.qty,0), 9);
+      if(i===5) return pCell(totJ.reduce((a,j)=>a+j.cut,0), 10);
+      if(i===NCols-1) return pCell(totJ.length+' jobs', 11);
+      return pCell('', 11);
+    });
+    rows.push(pRow(totCells, 16));
+    rows.push(emptyRow(NCols));
+  }
+
+  addSec(b1IP, b1Start, true);
+  addSec(b2IP, b2Start, false);
+
+  // Grand total
+  const gt = [...b1Start,...b2Start,...b1IP,...b2IP];
+  let gtCells = Array(NCols).fill(0).map((_,i)=>{
+    if(i===3) return pCell('GRAND TOTAL', 12);
+    if(i===4) return pCell(gt.reduce((a,j)=>a+j.qty,0), 13);
+    if(i===5) return pCell(gt.reduce((a,j)=>a+j.cut,0), 14);
+    if(i===NCols-1) return pCell(gt.length+' jobs total', 12);
+    return pCell('', 12);
+  });
+  rows.push(pRow(gtCells, 20));
+
+  return {rows, colWidths: CW};
+}
+
+function buildPrintSheetRows(sheetInfo){
+  const {dateLabel, c4Start, c6Start, c4IP, c6IP} = sheetInfo;
+  const allDay = [...c4Start,...c6Start,...c4IP,...c6IP];
+  const NCols = 23;
+  const CW = [5,14,22,34,9,11,20,16,12,16,14,10,14,10,12,9,10,12,9,10,12,9,28];
+  const HDR = ['Sr','JCNO','Customer','Job Name','Qty','Cut Sheet','Dimension',
+    'Item Type','Plan Machine','Status/Next','Coat/Lam','Commit',
+    'MR Type','MR Time','MR Date','MR Shift',
+    'Print Start','Print Date','Print Shift',
+    'Complete','End Date','End Shift','Notes'];
+
+  let rows = [];
+  let tCells = Array(NCols).fill(0).map((_,i)=>pCell(i===0?`AIA INDUSTRIES — PRINTING SCHEDULE — ${dateLabel.toUpperCase()}`:'', 21));
+  rows.push(pRow(tCells, 26));
+  let sCells = Array(NCols).fill(0).map((_,i)=>pCell(i===0?`4 Col: ${c4Start.length+c4IP.length} jobs  |  6 Col: ${c6Start.length+c6IP.length} jobs  |  Total Qty: ${allDay.reduce((a,j)=>a+j.qty,0).toLocaleString()}  |  Total Cut: ${allDay.reduce((a,j)=>a+j.cut,0).toLocaleString()}`:'', 2));
+  rows.push(pRow(sCells, 14));
+  rows.push(emptyRow(NCols));
+
+  function addSec(ipJobs, startJobs, is4){
+    const secS = is4?24:25, hdrS=is4?22:23, rowS=is4?26:27, ipS=is4?28:29;
+    const label = is4?'4 COL MACHINE':'6 COL MACHINE';
+    rows.push(pRow(Array(NCols).fill(0).map((_,i)=>pCell(i===0?label:'',secS)), 18));
+    if(!ipJobs.length&&!startJobs.length){ rows.push(pRow([pCell('  — No jobs —',2),...Array(NCols-1).fill(0).map(()=>pCell('',2))],14)); rows.push(emptyRow(NCols)); return; }
+    rows.push(pRow(HDR.map(h=>pCell(h,hdrS)),28));
+    ipJobs.forEach(j=>{
+      let vals=[j.sr,j.jcno,j.cust,j.name,j.qty,j.cut,j.dim,j.itemType||'',j.printMach,j.next||j.status,j.coatType||'',j.commit,j.mrLabel,j.mrTime,j.mrDate,j.mrShift,j.psTime,j.psDate,j.psShift,j.eTime,j.eDate,j.eShift,'In Progress'];
+      rows.push(pRow(vals.map((v,ci)=>pCell(v,[13,16,19].includes(ci)?19:ipS)),15));
+    });
+    startJobs.forEach(j=>{
+      let vals=[j.sr,j.jcno,j.cust,j.name,j.qty,j.cut,j.dim,j.itemType||'',j.printMach,j.next||j.status,j.coatType||'',j.commit,j.mrLabel,j.mrTime,j.mrDate,j.mrShift,j.psTime,j.psDate,j.psShift,j.eTime,j.eDate,j.eShift,j.sKey===j.eKey?'Done Today':'Continues'];
+      rows.push(pRow(vals.map((v,ci)=>pCell(v,[13,16,19].includes(ci)?(is4?17:18):rowS)),15));
+    });
+    const totJ=[...ipJobs,...startJobs];
+    rows.push(pRow(Array(NCols).fill(0).map((_,i)=>i===3?pCell('TOTAL',11):i===4?pCell(totJ.reduce((a,j)=>a+j.qty,0),9):i===5?pCell(totJ.reduce((a,j)=>a+j.cut,0),10):i===NCols-1?pCell(totJ.length+' jobs',11):pCell('',11)),16));
+    rows.push(emptyRow(NCols));
+  }
+
+  addSec(c4IP,c4Start,true);
+  addSec(c6IP,c6Start,false);
+  const gt=[...c4Start,...c6Start,...c4IP,...c6IP];
+  rows.push(pRow(Array(NCols).fill(0).map((_,i)=>i===3?pCell('GRAND TOTAL',12):i===4?pCell(gt.reduce((a,j)=>a+j.qty,0),13):i===5?pCell(gt.reduce((a,j)=>a+j.cut,0),14):i===NCols-1?pCell(gt.length+' jobs',12):pCell('',12)),20));
+  return {rows, colWidths: CW};
+}
+
+const _SM = {
+  1:  {bg:'0F2744', fc:'FFFFFF', bold:true,  sz:13},
+  2:  {bg:'0D1B2A', fc:'94A3B8', bold:false, sz:9},
+  3:  {bg:'1E3A8A', fc:'FFFFFF', bold:true,  sz:9},
+  4:  {bg:'14532D', fc:'FFFFFF', bold:true,  sz:9},
+  5:  {bg:'DBEAFE', fc:'1E293B', bold:false, sz:9},
+  6:  {bg:'DCFCE7', fc:'1E293B', bold:false, sz:9},
+  7:  {bg:'FFF7ED', fc:'92400E', bold:false, sz:9},
+  8:  {bg:'FEF3C7', fc:'1E293B', bold:false, sz:9},
+  9:  {bg:'1A2B40', fc:'22C55E', bold:true,  sz:11},
+  10: {bg:'1A2B40', fc:'F97316', bold:true,  sz:11},
+  11: {bg:'1A2B40', fc:'94A3B8', bold:true,  sz:9},
+  12: {bg:'0F2744', fc:'94A3B8', bold:true,  sz:9},
+  13: {bg:'0F2744', fc:'22C55E', bold:true,  sz:13},
+  14: {bg:'0F2744', fc:'F97316', bold:true,  sz:13},
+  15: {bg:'1E3A8A', fc:'FFFFFF', bold:true,  sz:10},
+  16: {bg:'14532D', fc:'FFFFFF', bold:true,  sz:10},
+  17: {bg:'DBEAFE', fc:'1E293B', bold:true,  sz:10},
+  18: {bg:'DCFCE7', fc:'1E293B', bold:true,  sz:10},
+  19: {bg:'FFF7ED', fc:'92400E', bold:true,  sz:10},
+  20: {bg:'0F2744', fc:'94A3B8', bold:true,  sz:9},
+  21: {bg:'1A0050', fc:'FFFFFF', bold:true,  sz:13},
+  22: {bg:'1E3A8A', fc:'FFFFFF', bold:true,  sz:9},
+  23: {bg:'7E22CE', fc:'FFFFFF', bold:true,  sz:9},
+  24: {bg:'1E3A8A', fc:'FFFFFF', bold:true,  sz:10},
+  25: {bg:'7E22CE', fc:'FFFFFF', bold:true,  sz:10},
+  26: {bg:'EFF6FF', fc:'1E293B', bold:false, sz:9},
+  27: {bg:'F5F3FF', fc:'1E293B', bold:false, sz:9},
+  28: {bg:'FFF7ED', fc:'92400E', bold:false, sz:9},
+  29: {bg:'FDF4FF', fc:'1E293B', bold:false, sz:9},
+};
+function applyXlStyles(ws, rows){
+  rows.forEach((row, ri) => {
+    if(!row) return;
+    const ncols = row.cells.length;
+    for(let ci=0; ci<ncols; ci++){
+      const cell = row.cells[ci];
+      const s = cell.s||0; if(!s) return;
+      const st = _SM[s]; if(!st) return;
+      const addr = XLSX.utils.encode_cell({r:ri, c:ci});
+      // Create cell if missing (for empty styled cells)
+      if(!ws[addr]) ws[addr] = {t:'s', v:''};
+      ws[addr].s = {
+        fill: {patternType:'solid', fgColor:{rgb:'FF'+st.bg}},
+        font: {bold:st.bold, sz:st.sz, color:{rgb:'FF'+st.fc}, name:'Calibri'},
+        alignment: {vertical:'center', wrapText:!!(s===3||s===4||s===22||s===23)}
+      };
+    }
+  });
+}
+async function buildAndSaveXL(sheetsInfo, filename){
+  const wbXL = XLSX.utils.book_new();
+  sheetsInfo.forEach((s, idx) => {
+    try {
+      const {rows, colWidths} = buildPunchSheetRows(s);
+      const aoa = rows.map(r => r ? r.cells.map(c => c.v===''||c.v==null ? '' : c.v) : []);
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      ws['!cols'] = colWidths.map(w=>({wch:w}));
+      ws['!rows'] = rows.map(r => r ? {hpt: r.ht||15} : {hpt:6});
+      try { applyXlStyles(ws, rows); } catch(se){ console.warn('Style err sheet'+idx, se.message); }
+      let sname = s.sheetName||('S'+(idx+1));
+      if(wbXL.SheetNames.includes(sname)) sname += '_'+idx;
+      XLSX.utils.book_append_sheet(wbXL, ws, sname);
+      console.log('✅ Sheet added:', sname, 'rows:', rows.length);
+    } catch(e){ console.error('❌ Sheet err idx='+idx+':', e.message, e); }
+  });
+  console.log('📋 Final SheetNames:', wbXL.SheetNames, 'count:', wbXL.SheetNames.length);
+  XLSX.writeFile(wbXL, filename);
+  toast('⬇️ ' + filename + ' ready!');
+}
+
+async function buildAndSavePrintXL(sheetsInfo, filename){
+  const wbXL = XLSX.utils.book_new();
+  sheetsInfo.forEach((s, idx) => {
+    try {
+      const {rows, colWidths} = buildPrintSheetRows(s);
+      const aoa = rows.map(r => r ? r.cells.map(c => c.v===''||c.v==null ? '' : c.v) : []);
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      ws['!cols'] = colWidths.map(w=>({wch:w}));
+      ws['!rows'] = rows.map(r => r ? {hpt: r.ht||15} : {hpt:6});
+      try { applyXlStyles(ws, rows); } catch(se){ console.warn('Style err sheet'+idx, se.message); }
+      let sname = s.sheetName||('S'+(idx+1));
+      if(wbXL.SheetNames.includes(sname)) sname += '_'+idx;
+      XLSX.utils.book_append_sheet(wbXL, ws, sname);
+      console.log('✅ Print sheet added:', sname, 'rows:', rows.length);
+    } catch(e){ console.error('❌ Print sheet err idx='+idx+':', e.message, e); }
+  });
+  XLSX.writeFile(wbXL, filename);
+  toast('⬇️ ' + filename + ' ready!');
+}
+
+
+// ── Minimal ZIP builder for XLSX ──
+function buildZip(sheets, styleXml, sheetNames){
+  // XLSX structure needs: [Content_Types].xml, _rels/.rels, xl/workbook.xml,
+  // xl/_rels/workbook.xml.rels, xl/styles.xml, xl/worksheets/sheet*.xml
+
+  const enc = new TextEncoder();
+
+  const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+  ${sheetNames.map((_,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}
+</Types>`;
+
+  const relsMain = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>`;
+
+  const wbRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId0" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+  ${sheetNames.map((_,i)=>`<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join('')}
+</Relationships>`;
+
+  const workbook = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets>
+    ${sheetNames.map((n,i)=>`<sheet name="${xesc(n)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join('')}
+  </sheets>
+</workbook>`;
+
+  const files = [
+    {name:'[Content_Types].xml', data: enc.encode(contentTypes)},
+    {name:'_rels/.rels',          data: enc.encode(relsMain)},
+    {name:'xl/workbook.xml',      data: enc.encode(workbook)},
+    {name:'xl/_rels/workbook.xml.rels', data: enc.encode(wbRels)},
+    {name:'xl/styles.xml',        data: enc.encode(styleXml)},
+    ...sheets.map((s,i)=>({name:`xl/worksheets/sheet${i+1}.xml`, data: enc.encode(s.data)}))
+  ];
+
+  return makeZip(files);
+}
+
+function makeZip(files){
+  // Simple uncompressed ZIP
+  const parts = [];
+  const centralDir = [];
+  let offset = 0;
+
+  files.forEach(({name, data})=>{
+    const nameBytes = new TextEncoder().encode(name);
+    const crc = crc32(data);
+    const local = new Uint8Array(30 + nameBytes.length + data.length);
+    const dv = new DataView(local.buffer);
+    // Local file header
+    dv.setUint32(0, 0x04034b50, true); // signature
+    dv.setUint16(4, 20, true);  // version needed
+    dv.setUint16(6, 0, true);   // flags
+    dv.setUint16(8, 0, true);   // compression: stored
+    dv.setUint16(10, 0, true);  // mod time
+    dv.setUint16(12, 0, true);  // mod date
+    dv.setUint32(14, crc, true);
+    dv.setUint32(18, data.length, true);
+    dv.setUint32(22, data.length, true);
+    dv.setUint16(26, nameBytes.length, true);
+    dv.setUint16(28, 0, true);
+    local.set(nameBytes, 30);
+    local.set(data, 30 + nameBytes.length);
+    parts.push(local);
+
+    // Central directory entry
+    const cd = new Uint8Array(46 + nameBytes.length);
+    const cdv = new DataView(cd.buffer);
+    cdv.setUint32(0, 0x02014b50, true);
+    cdv.setUint16(4, 20, true);
+    cdv.setUint16(6, 20, true);
+    cdv.setUint16(8, 0, true);
+    cdv.setUint16(10, 0, true);
+    cdv.setUint16(12, 0, true);
+    cdv.setUint16(14, 0, true);
+    cdv.setUint32(16, crc, true);
+    cdv.setUint32(20, data.length, true);
+    cdv.setUint32(24, data.length, true);
+    cdv.setUint16(28, nameBytes.length, true);
+    cdv.setUint16(30, 0, true);
+    cdv.setUint16(32, 0, true);
+    cdv.setUint16(34, 0, true);
+    cdv.setUint16(36, 0, true);
+    cdv.setUint32(38, 0x20, true); // external attr: archive
+    cdv.setUint32(42, offset, true);
+    cd.set(nameBytes, 46);
+    centralDir.push(cd);
+    offset += local.length;
+  });
+
+  const cdSize = centralDir.reduce((a,c)=>a+c.length, 0);
+  const eocd = new Uint8Array(22);
+  const ev = new DataView(eocd.buffer);
+  ev.setUint32(0, 0x06054b50, true);
+  ev.setUint16(4, 0, true);
+  ev.setUint16(6, 0, true);
+  ev.setUint16(8, files.length, true);
+  ev.setUint16(10, files.length, true);
+  ev.setUint32(12, cdSize, true);
+  ev.setUint32(16, offset, true);
+  ev.setUint16(20, 0, true);
+
+  const total = parts.reduce((a,p)=>a+p.length,0) + cdSize + eocd.length;
+  const out = new Uint8Array(total);
+  let pos = 0;
+  parts.forEach(p=>{ out.set(p,pos); pos+=p.length; });
+  centralDir.forEach(c=>{ out.set(c,pos); pos+=c.length; });
+  out.set(eocd, pos);
+  return out.buffer;
+}
+
+function crc32(data){
+  const table = crc32.table || (()=>{
+    const t = new Uint32Array(256);
+    for(let i=0;i<256;i++){
+      let c=i;
+      for(let j=0;j<8;j++) c = c&1 ? 0xEDB88320^(c>>>1) : c>>>1;
+      t[i]=c;
+    }
+    return crc32.table = t;
+  })();
+  let c = 0xFFFFFFFF;
+  for(let i=0;i<data.length;i++) c = table[(c^data[i])&0xFF]^(c>>>8);
+  return (c^0xFFFFFFFF)>>>0;
+}
+
 function goPg(n){
   ['pg1','pg2','pg3'].forEach((id,i)=>
     document.getElementById(id).classList.toggle('hidden', i+1!==n));
@@ -1051,17 +2300,12 @@ function goPg(n){
   document.getElementById('sl2').classList.toggle('done', n>2);
 }
 
-function switchTab(t){
-  document.getElementById('dayView').classList.toggle('hidden', t!=='day');
-  document.getElementById('tblView').classList.toggle('hidden', t!=='tbl');
-  document.querySelectorAll('.tab').forEach((el,i)=>
-    el.classList.toggle('on', (i===0&&t==='day')||(i===1&&t==='tbl')));
-}
+
 
 function pc(s){
   return {PH:'p-ph',VDP:'p-vdp',LAMINATION:'p-lam',SCREEN:'p-scr',
     FOIL:'p-foil','2ND PASS':'p-2nd','Job Not Started':'p-jns',
-    URGENT:'p-urg',B1:'p-b1',B2:'p-b2'}[s]||'p-jns';
+    URGENT:'p-urg',B1:'p-b1',B2:'p-b2','4 Col':'p-4c','6 Col':'p-6c'}[s]||'p-jns';
 }
 
 var _toastT;
@@ -1072,7 +2316,7 @@ function toast(msg){
   _toastT = setTimeout(()=>el.classList.remove('on'), 3500);
 }
 
-goPg(1);
+
 </script>
 </body>
 </html>
