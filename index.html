@@ -404,7 +404,7 @@ const SEG_WM2 = [0, 390, 690, 840, 930, 1320];
 const DAY_WORK = 1320; // 22 hrs
 
 const SPEED   = 5000 / 60;  // cut sheets per min
-const MR_NEW  = 90;
+const MR_NEW  = 60;
 const MR_SAME = 10;
 let BASE = new Date(); BASE.setHours(0,0,0,0);
 
@@ -675,7 +675,12 @@ function buildSchedule(){
 
   sched = sorted.map((job,idx)=>{
     let dim  = job.dim;
-    let mName = M.B1.wm <= M.B2.wm ? 'B1' : 'B2';
+    // Same dim already on a machine? Send there (save MR time)
+    // Else send to earliest free machine
+    let mName;
+    if(M.B1.lastDim === dim && M.B2.lastDim !== dim) mName = 'B1';
+    else if(M.B2.lastDim === dim && M.B1.lastDim !== dim) mName = 'B2';
+    else mName = M.B1.wm <= M.B2.wm ? 'B1' : 'B2';
     let m    = M[mName];
     let mr   = m.lastDim === dim ? MR_SAME : MR_NEW;
     let mrLabel = m.lastDim === dim ? `Same Dim (${MR_SAME} min)` : `New Dim (${MR_NEW} min)`;
