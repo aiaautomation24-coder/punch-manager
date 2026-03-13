@@ -1450,30 +1450,32 @@ function dlDay(key){
 async function dlAllDays(){
   if(!sched.length){ toast('⚠️ Schedule nahi hai!'); return; }
 
-  // Collect all unique working days across ALL jobs (sKey to eKey range)
+  // Collect ALL unique day keys — from sKey AND eKey of every job
   let daySet = new Set();
   sched.forEach(j=>{
-    let d   = new Date((j.sKey||j.mrKey)+'T12:00:00');
-    let end = new Date((j.eKey||j.sKey)+'T12:00:00');
-    for(let i=0; i<=60; i++){           // max 60 day safety cap
-      if(d > end) break;
-      if(d.getDay() !== 0){             // skip Sunday
-        let iso = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-        daySet.add(iso);
+    if(j.sKey)  daySet.add(j.sKey);
+    if(j.mrKey) daySet.add(j.mrKey);
+    if(j.eKey)  daySet.add(j.eKey);
+    // Also fill in between for multi-day jobs
+    if(j.sKey && j.eKey && j.sKey !== j.eKey){
+      let d = new Date(j.sKey + 'T12:00:00');
+      let e = new Date(j.eKey + 'T12:00:00');
+      for(let i=0; i<=30; i++){
+        if(d >= e) break;
+        d.setDate(d.getDate()+1);
+        if(d.getDay()!==0)
+          daySet.add(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'));
       }
-      d.setDate(d.getDate()+1);
     }
   });
 
   let days = [...daySet].sort();
-  console.log('dlAllDays — total days:', days.length, days);
+  console.log('dlAllDays — days found:', days.length, days);
 
   let sheets = days.map(key=>{
     let dateLabel = new Date(key+'T12:00:00').toLocaleDateString('en-IN',
       {weekday:'long',day:'2-digit',month:'short',year:'numeric'});
-    // startJobs: jobs whose MR starts on this day
     let startJobs = sched.filter(j=>(j.sKey||j.mrKey)===key);
-    // ipJobs: jobs that started before this day and end on/after this day
     let ipJobs    = sched.filter(j=>(j.sKey||j.mrKey)<key && (j.eKey||j.sKey)>=key);
     if(!startJobs.length && !ipJobs.length) return null;
     let sn = new Date(key+'T12:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short'}).replace(' ','-');
@@ -1488,6 +1490,7 @@ async function dlAllDays(){
   }).filter(Boolean);
 
   console.log('sheets to build:', sheets.length, sheets.map(s=>s.sheetName));
+  if(!sheets.length){ toast('⚠️ Koi sheet nahi bani!'); return; }
   toast(`⏳ ${sheets.length} din ka Excel ban raha hai...`);
 
   try {
@@ -1941,17 +1944,20 @@ function buildPunchSheetRows(sheetInfo){
     'Complete','End Date','End Shift','Remarks'];
 
   let rows = [];
-  // Title
-  let tCells = Array(NCols).fill(0).map((_,i)=>pCell(i===0?`AIA INDUSTRIES — PUNCHING SCHEDULE — ${dateLabel.toUpperCase()}`:'', 1));
-  rows.push(pRow(tCells, 26));
-  // Date info row
+  // Row 1: Company title
+  let tCells = Array(NCols).fill(0).map((_,i)=>pCell(i===0?'AIA INDUSTRIES — PUNCHING SCHEDULE':'', 1));
+  rows.push(pRow(tCells, 28));
+  // Row 2: Date & Day — large, center, merged
+  let dateCells = Array(NCols).fill(0).map((_,i)=>pCell(i===0?dateLabel.toUpperCase():'', 30));
+  rows.push(pRow(dateCells, 32));
+  // Row 3: Shift info
   const allMRDates = [...b1Start,...b2Start,...b1IP,...b2IP].map(j=>j.mrDate).filter(Boolean);
   const allEndDates = [...b1Start,...b2Start,...b1IP,...b2IP].map(j=>j.eDate).filter(Boolean);
   const mrDateStr  = allMRDates.length  ? [...new Set(allMRDates)].join(', ')  : dateLabel;
   const endDateStr = allEndDates.length ? [...new Set(allEndDates)].join(', ') : '—';
   let dCells = Array(NCols).fill(0).map((_,i)=>pCell(i===0?`Shift 1: 07:00–19:00  |  Shift 2: 19:30–07:00  |  MR Date: ${mrDateStr}  |  Expected Completion: ${endDateStr}`:'', 2));
   rows.push(pRow(dCells, 14));
-  // Subtitle
+  // Row 4: Summary
   let sCells = Array(NCols).fill(0).map((_,i)=>pCell(i===0?`B1: ${b1Start.length+b1IP.length} jobs  |  B2: ${b2Start.length+b2IP.length} jobs  |  Total Qty: ${allDay.reduce((a,j)=>a+j.qty,0).toLocaleString()}  |  Total Cut: ${allDay.reduce((a,j)=>a+j.cut,0).toLocaleString()}`:'', 2));
   rows.push(pRow(sCells, 14));
   rows.push(emptyRow(NCols));
@@ -2085,6 +2091,7 @@ const _SM = {
   21: {bg:'1A0050', fc:'FFFFFF', bold:true,  sz:13},
   22: {bg:'1E3A8A', fc:'FFFFFF', bold:true,  sz:9},
   23: {bg:'7E22CE', fc:'FFFFFF', bold:true,  sz:9},
+  30: {bg:'0F2744', fc:'F97316', bold:true,  sz:18},
   24: {bg:'1E3A8A', fc:'FFFFFF', bold:true,  sz:10},
   25: {bg:'7E22CE', fc:'FFFFFF', bold:true,  sz:10},
   26: {bg:'EFF6FF', fc:'1E293B', bold:false, sz:9},
@@ -2101,12 +2108,15 @@ function applyXlStyles(ws, rows){
       const s = cell.s||0; if(!s) return;
       const st = _SM[s]; if(!st) return;
       const addr = XLSX.utils.encode_cell({r:ri, c:ci});
-      // Create cell if missing (for empty styled cells)
       if(!ws[addr]) ws[addr] = {t:'s', v:''};
       ws[addr].s = {
         fill: {patternType:'solid', fgColor:{rgb:'FF'+st.bg}},
         font: {bold:st.bold, sz:st.sz, color:{rgb:'FF'+st.fc}, name:'Calibri'},
-        alignment: {vertical:'center', wrapText:!!(s===3||s===4||s===22||s===23)}
+        alignment: {
+          vertical:'center',
+          horizontal: (s===1||s===30) ? 'center' : 'left',
+          wrapText:!!(s===3||s===4||s===22||s===23)
+        }
       };
     }
   });
@@ -2120,6 +2130,12 @@ async function buildAndSaveXL(sheetsInfo, filename){
       const ws = XLSX.utils.aoa_to_sheet(aoa);
       ws['!cols'] = colWidths.map(w=>({wch:w}));
       ws['!rows'] = rows.map(r => r ? {hpt: r.ht||15} : {hpt:6});
+      // Merge title row (row 0) and date row (row 1) across all columns
+      const lastCol = colWidths.length - 1;
+      ws['!merges'] = [
+        {s:{r:0,c:0}, e:{r:0,c:lastCol}},
+        {s:{r:1,c:0}, e:{r:1,c:lastCol}},
+      ];
       try { applyXlStyles(ws, rows); } catch(se){ console.warn('Style err sheet'+idx, se.message); }
       let sname = s.sheetName||('S'+(idx+1));
       if(wbXL.SheetNames.includes(sname)) sname += '_'+idx;
